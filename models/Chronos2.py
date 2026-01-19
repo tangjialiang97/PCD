@@ -27,7 +27,7 @@ class Model(nn.Module):
 
         B, L, C = x_enc.shape
         x_enc = x_enc.permute(0, 2, 1)
-        quantiles, dec_out = self.model.predict_quantiles(x_enc.cpu().numpy(), prediction_length=self.pred_len, quantile_levels=[0.1, 0.5, 0.9])
+        quantiles, dec_out = self.model.predict_quantiles(x_enc.detach().cpu().numpy(), prediction_length=self.pred_len, quantile_levels=[0.1, 0.5, 0.9])
         dec_out = torch.stack(dec_out, dim=0).to(x_enc.device)
         dec_out= dec_out.permute(0, 2, 1)
         dec_out = dec_out * \
@@ -37,7 +37,5 @@ class Model(nn.Module):
         return dec_out
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
-        if self.task_name == 'zero_shot_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-            return dec_out
-        return None
+        dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
+        return dec_out

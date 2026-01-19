@@ -190,25 +190,25 @@ class Model(nn.Module):
 
         self.out_linear_1 = torch.nn.Linear(self.d_model, self.pred_len // 8)
         self.out_linear_2 = torch.nn.Linear(
-            self.d_model + self.pred_len // 8, self.pred_len // 8
+            self.d_model + (self.pred_len // 8), self.pred_len // 8
         )
         self.out_linear_3 = torch.nn.Linear(
-            self.d_model + 2 * self.pred_len // 8, self.pred_len // 8
+            self.d_model + 2 * (self.pred_len // 8), self.pred_len // 8
         )
         self.out_linear_4 = torch.nn.Linear(
-            self.d_model + 3 * self.pred_len // 8, self.pred_len // 8
+            self.d_model + 3 * (self.pred_len // 8), self.pred_len // 8
         )
         self.out_linear_5 = torch.nn.Linear(
-            self.d_model + self.pred_len // 2, self.pred_len // 8
+            self.d_model + 4 * (self.pred_len // 8), self.pred_len // 8
         )
         self.out_linear_6 = torch.nn.Linear(
-            self.d_model + 5 * self.pred_len // 8, self.pred_len // 8
+            self.d_model + 5 * (self.pred_len // 8), self.pred_len // 8
         )
         self.out_linear_7 = torch.nn.Linear(
-            self.d_model + 6 * self.pred_len // 8, self.pred_len // 8
+            self.d_model + 6 * (self.pred_len // 8), self.pred_len // 8
         )
         self.out_linear_8 = torch.nn.Linear(
-            self.d_model + 7 * self.pred_len // 8,
+            self.d_model + 7 * (self.pred_len // 8),
             self.pred_len - 7 * (self.pred_len // 8),
         )
 
@@ -240,6 +240,13 @@ class Model(nn.Module):
         encoding_patch4 = self.embedding_patch_4(
             rearrange(x_i_p4, "b c l -> (b c) l").unsqueeze(-1).permute(0, 2, 1)
         ).permute(0, 2, 1)
+
+        # 对齐不同卷积得到的序列长度，裁剪到统一的 patch_num1 以便 concat
+        patch_len_target = self.patch_num1
+        encoding_patch1 = encoding_patch1[:, :patch_len_target, :]
+        encoding_patch2 = encoding_patch2[:, :patch_len_target, :]
+        encoding_patch3 = encoding_patch3[:, :patch_len_target, :]
+        encoding_patch4 = encoding_patch4[:, :patch_len_target, :]
 
         encoding_patch = (
             torch.cat(

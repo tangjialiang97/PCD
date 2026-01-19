@@ -10,7 +10,8 @@ from exp.exp_classification import Exp_Classification
 from utils.print_args import print_args
 import random
 import numpy as np
-
+def str2bool(v):
+    return str(v).lower() in ("1", "true", "t", "yes", "y")
 if __name__ == '__main__':
     fix_seed = 2021
     random.seed(fix_seed)
@@ -41,9 +42,14 @@ if __name__ == '__main__':
     # forecasting task
     parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
     parser.add_argument('--label_len', type=int, default=48, help='start token length')
+    parser.add_argument('--seq_len_hours', type=int, default=18, help='input sequence length in hours')
+    parser.add_argument('--pred_len_hours', type=int, default=6, help='prediction sequence length in hours')
+    parser.add_argument('--label_len_hours', type=int, default=0, help='start token length in hours')
     parser.add_argument('--pred_len', type=int, default=96, help='prediction sequence length')
     parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
     parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
+    parser.add_argument('--data_path_trainval', type=str, default='trainval_timestamp_target.csv', help='data file')
+    parser.add_argument('--data_path_test', type=str, default='test_timestamp_target.csv', help='data file')
 
     # inputation task
     parser.add_argument('--mask_rate', type=float, default=0.25, help='mask ratio')
@@ -79,7 +85,7 @@ if __name__ == '__main__':
                         help='method of series decompsition, only support moving_avg or dft_decomp')
     parser.add_argument('--use_norm', type=int, default=1, help='whether to use normalize; True 1 False 0')
     parser.add_argument('--down_sampling_layers', type=int, default=0, help='num of down sampling layers')
-    parser.add_argument('--down_sampling_window', type=int, default=1, help='down sampling window size')
+    parser.add_argument('--down_sampling_window', type=int, default=2, help='down sampling window size')
     parser.add_argument('--down_sampling_method', type=str, default=None,
                         help='down sampling method, only support avg, max, conv')
     parser.add_argument('--seg_len', type=int, default=96,
@@ -91,7 +97,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
     parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
-    parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
+    parser.add_argument('--learning_rate', type=float, default=0.01, help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='test', help='exp description')
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
@@ -112,6 +118,8 @@ if __name__ == '__main__':
     # metrics (dtw)
     parser.add_argument('--use_dtw', type=bool, default=False,
                         help='the controller of using dtw metric (dtw is time consuming, not suggested unless necessary)')
+    parser.add_argument('--debug', type=str2bool, default=False, help='debug mode (True/False)')
+
 
     # Augmentation
     parser.add_argument('--augmentation_ratio', type=int, default=0, help="How many times to augment")
@@ -136,6 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--discsdtw', default=False, action="store_true",
                         help="Discrimitive shapeDTW warp preset augmentation")
     parser.add_argument('--extra_tag', type=str, default="", help="Anything extra")
+    parser.add_argument('--delta', type=float, default=0.2, help="Delta for PostProcessingNet")
 
     # TimeXer
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')
@@ -175,6 +184,10 @@ if __name__ == '__main__':
 
     print('Args in experiment:')
     print_args(args)
+    if args.debug:
+        print('Debug mode is enabled')
+        args.itr = 1
+        args.train_epochs = 1
 
     if args.task_name == 'long_term_forecast':
         Exp = Exp_Long_Term_Forecast

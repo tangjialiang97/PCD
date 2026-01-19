@@ -30,12 +30,22 @@ def MAPE(pred, true):
 def MSPE(pred, true):
     return np.mean(np.square((true - pred) / true))
 
+def nRMSE(pred, true, ymax=400):
+    return np.sqrt(np.mean((true - pred) ** 2)) / ymax
+
+def nMAE(pred, true, ymax=400):
+    return np.mean(np.abs(true - pred)) / ymax
 
 def metric(pred, true):
     mae = MAE(pred, true)
     mse = MSE(pred, true)
-    rmse = RMSE(pred, true)
-    mape = MAPE(pred, true)
-    mspe = MSPE(pred, true)
+    nrmse = nRMSE(pred, true, ymax=1366)
+    nmae = nMAE(pred, true, ymax=1366)
+    return mae, mse, nrmse, nmae
 
-    return mae, mse, rmse, mape, mspe
+def metric_with_ymax(pred, true, ymax):
+    mae = MAE(pred, true)
+    mse = MSE(pred, true)
+    nrmse = nRMSE(pred, true, ymax=ymax)
+    nmae = nMAE(pred, true, ymax=ymax)
+    return mae, mse, nrmse, nmae
