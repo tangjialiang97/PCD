@@ -1,7 +1,11 @@
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
+<<<<<<< HEAD
 from utils.metrics import metric
+=======
+from utils.metrics import metric, metric_with_ymax
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 import torch
 import torch.nn as nn
 from torch import optim
@@ -52,6 +56,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
+<<<<<<< HEAD
                 batch_x_main = batch_x[:, :, :3]
                 batch_y_main = batch_y[:, :, :3]
 
@@ -70,6 +75,23 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 pred = outputs.detach()
                 true = batch_y_main_pred.detach()
+=======
+                # decoder input
+                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                # encoder - decoder
+                if self.args.use_amp:
+                    with torch.cuda.amp.autocast():
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                else:
+                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                f_dim = -1 if self.args.features == 'MS' else 0
+                outputs = outputs[:, -self.args.pred_len:, f_dim:]
+                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+
+                pred = outputs.detach()
+                true = batch_y.detach()
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
                 loss = criterion(pred, true)
 
@@ -100,7 +122,11 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             test_loader = list(itertools.islice(test_loader, 10))
 
         if self.args.use_amp:
+<<<<<<< HEAD
             scaler = torch.npu.amp.GradScaler()
+=======
+            scaler = torch.cuda.amp.GradScaler()
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -116,6 +142,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
+<<<<<<< HEAD
                 batch_x_main = batch_x[:, :, :3]
                 batch_y_main = batch_y[:, :, :3]
 
@@ -202,6 +229,30 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         loss = loss + var_weight * l_var
 
                 train_loss.append(loss.item())
+=======
+                # decoder input
+                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+
+                # encoder - decoder
+                if self.args.use_amp:
+                    with torch.cuda.amp.autocast():
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+
+                        f_dim = -1 if self.args.features == 'MS' else 0
+                        outputs = outputs[:, -self.args.pred_len:, f_dim:]
+                        batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                        loss = criterion(outputs, batch_y)
+                        train_loss.append(loss.item())
+                else:
+                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+
+                    f_dim = -1 if self.args.features == 'MS' else 0
+                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
+                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                    loss = criterion(outputs, batch_y)
+                    train_loss.append(loss.item())
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
                 if (i + 1) % 100 == 0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
@@ -259,6 +310,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
+<<<<<<< HEAD
                 batch_x_main = batch_x[:, :, :3]
                 batch_y_main = batch_y[:, :, :3]
 
@@ -286,6 +338,36 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 pred = outputs
                 true = batch_y_main_pred
+=======
+                # decoder input
+                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                # encoder - decoder
+                if self.args.use_amp:
+                    with torch.cuda.amp.autocast():
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+                else:
+                    outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
+
+                f_dim = -1 if self.args.features == 'MS' else 0
+                outputs = outputs[:, -self.args.pred_len:, :]
+                batch_y = batch_y[:, -self.args.pred_len:, :].to(self.device)
+                outputs = outputs.detach().cpu().numpy()
+                batch_y = batch_y.detach().cpu().numpy()
+                if test_data.scale and self.args.inverse:
+                    shape = batch_y.shape
+                    if outputs.shape[-1] != batch_y.shape[-1]:
+                        outputs = np.tile(outputs, [1, 1, int(batch_y.shape[-1] / outputs.shape[-1])])
+                    outputs = test_data.inverse_transform(outputs.reshape(shape[0] * shape[1], -1)).reshape(shape)
+                    batch_y = test_data.inverse_transform(batch_y.reshape(shape[0] * shape[1], -1)).reshape(shape)
+      
+
+                outputs = outputs[:, :, f_dim:]
+                batch_y = batch_y[:, :, f_dim:]
+
+                pred = outputs
+                true = batch_y
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
                 preds.append(pred)
                 trues.append(true)
@@ -295,9 +377,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         print('test shape:', preds.shape, trues.shape)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
+<<<<<<< HEAD
 
         preds = preds[:, :, 0:1]
         trues = trues[:, :, 0:1]
+=======
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         print('test shape:', preds.shape, trues.shape)
 
         # dtw calculation
@@ -317,12 +402,22 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         ymax = test_data.ymax
         # ymax = 1.0
+<<<<<<< HEAD
         mae, mse, nrmse, nmae = metric(preds, trues, ymax)
         print('mse:{}, mae:{}, nrmse:{}, nmae:{}'.format(mse, mae, nrmse, nmae))
         f = open("result_long_term_forecast_" + self.args.data + "_" + self.args.data_path.split(".")[0] + "_" + str(self.args.use_auxiliary) + ".txt", 'a')
+=======
+        mae, mse, nrmse, nmae = metric_with_ymax(preds, trues, ymax)
+        print('mse:{}, mae:{}, nrmse:{}, nmae:{}'.format(mse, mae, nrmse, nmae))
+        f = open("result_long_term_forecast_" + self.args.data + "_" + self.args.data_path.split(".")[0] + ".txt", 'a')
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         f.write(setting + "  \n")
         f.write('mse:{}, mae:{}, nrmse:{}, nmae:{}'.format(mse, mae, nrmse, nmae))
         f.write('\n')
         f.write('\n')
         f.close()
+<<<<<<< HEAD
         return
+=======
+        return
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1

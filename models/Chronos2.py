@@ -13,7 +13,11 @@ class Model(nn.Module):
         stride: int, stride for patch_embedding
         """
         super().__init__()
+<<<<<<< HEAD
         self.model = BaseChronosPipeline.from_pretrained("amazon/chronos-2", device_map="npu")
+=======
+        self.model = BaseChronosPipeline.from_pretrained("amazon/chronos-2", device_map="cuda")
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len

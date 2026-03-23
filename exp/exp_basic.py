@@ -63,6 +63,7 @@ class Exp_Basic(object):
         return None
 
     def _acquire_device(self):
+<<<<<<< HEAD
         if self.args.use_gpu and self.args.gpu_type == 'npu':
             # If we restrict visible devices to a single physical NPU (e.g. "4"),
             # it becomes local device index 0 inside this process.
@@ -74,6 +75,13 @@ class Exp_Basic(object):
                 os.environ["ASCEND_RT_VISIBLE_DEVICES"] = self.args.devices
                 device = torch.device('npu:{}'.format(self.args.gpu))
                 print('Use GPU: npu:{} (visible: {})'.format(self.args.gpu, self.args.devices))
+=======
+        if self.args.use_gpu and self.args.gpu_type == 'cuda':
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(
+                self.args.gpu) if not self.args.use_multi_gpu else self.args.devices
+            device = torch.device('cuda:{}'.format(self.args.gpu))
+            print('Use GPU: cuda:{}'.format(self.args.gpu))
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         elif self.args.use_gpu and self.args.gpu_type == 'mps':
             device = torch.device('mps')
             print('Use GPU: mps')

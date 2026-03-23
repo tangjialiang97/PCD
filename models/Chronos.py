@@ -15,7 +15,11 @@ class Model(nn.Module):
         super().__init__()
         self.model = BaseChronosPipeline.from_pretrained(
             "amazon/chronos-bolt-base",
+<<<<<<< HEAD
             device_map="npu",  # use "cpu" for CPU inference and "mps" for Apple Silicon
+=======
+            device_map="cuda",  # use "cpu" for CPU inference and "mps" for Apple Silicon
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
             torch_dtype=torch.bfloat16,
         )
         self.task_name = configs.task_name

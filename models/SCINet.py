@@ -179,7 +179,11 @@ class Model(nn.Module):
     def get_position_encoding(self, x):
         max_length = x.size()[1]
         position = torch.arange(max_length, dtype=torch.float32,
+<<<<<<< HEAD
                                 device=x.device)  # tensor([0., 1., 2., 3., 4.], device='npu:0')
+=======
+                                device=x.device)  # tensor([0., 1., 2., 3., 4.], device='cuda:0')
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         scaled_time = position.unsqueeze(1) * self.inv_timescales.unsqueeze(0)  # 5 256
         signal = torch.cat([torch.sin(scaled_time), torch.cos(scaled_time)], dim=1)  # [T, C]
         signal = F.pad(signal, (0, 0, 0, self.pe_hidden_size % 2))

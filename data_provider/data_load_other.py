@@ -6,7 +6,11 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
 import warnings
 import argparse
+<<<<<<< HEAD
 import pvlib
+=======
+
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 warnings.filterwarnings('ignore')
 
 class Dataset_Other(Dataset):
@@ -40,13 +44,17 @@ class Dataset_Other(Dataset):
 
         self.root_path = root_path
         self.data_path_ = data_path
+<<<<<<< HEAD
         self.solar_latitude = float(getattr(self.args, 'solar_latitude', 38.677))
         self.solar_longitude = float(getattr(self.args, 'solar_longitude', -121.15))
         self.solar_timezone = str(getattr(self.args, 'solar_timezone', 'UTC'))
+=======
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
         self.__read_data__()
         self.__build_window_meta__()  # 预计算长度等
 
+<<<<<<< HEAD
     def _compute_solar_zenith(self, ts_series: pd.Series) -> np.ndarray:
         """
         Compute solar zenith angle (degrees) using pvlib solarposition.
@@ -70,6 +78,8 @@ class Dataset_Other(Dataset):
         zenith_deg = solpos['zenith'].to_numpy(dtype=np.float32)
         return zenith_deg.reshape(-1, 1)
 
+=======
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
     def __read_data__(self):
         """
         读取单个 data_path_，按 7:1:2 划分 train/val/test。
@@ -137,8 +147,11 @@ class Dataset_Other(Dataset):
         self.data_y = data_all[border1:border2]
         self.data_stamp = build_stamp(df_raw_.iloc[border1:border2])
 
+<<<<<<< HEAD
         self.data_zenith = self._compute_solar_zenith(df_raw_.iloc[border1:border2]['timestamp'])
 
+=======
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
     def __build_window_meta__(self):
         """
         用采样间隔 N 和窗口定义，预计算起点的最大值与长度。
@@ -179,10 +192,13 @@ class Dataset_Other(Dataset):
         # 取值
         seq_x = self.data_x[seq_idx_x]
         seq_y = self.data_y[seq_idx_y]
+<<<<<<< HEAD
         seq_x_zenith = self.data_zenith[seq_idx_x]
         seq_y_zenith = self.data_zenith[seq_idx_y]
         seq_x = np.concatenate([seq_x, seq_x_zenith], axis=1)
         seq_y = np.concatenate([seq_y, seq_y_zenith], axis=1)
+=======
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
         # 时间戳特征对齐索引
         seq_x_mark = self.data_stamp[seq_idx_x]

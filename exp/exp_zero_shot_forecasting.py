@@ -62,7 +62,11 @@ class Exp_Zero_Shot_Forecast(Exp_Basic):
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
                 # encoder - decoder
                 if self.args.use_amp:
+<<<<<<< HEAD
                     with torch.npu.amp.autocast():
+=======
+                    with torch.cuda.amp.autocast():
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)
                 else:
                     outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark)

@@ -11,7 +11,11 @@ class MIC(nn.Module):
     """
 
     def __init__(self, feature_size=512, n_heads=8, dropout=0.05, decomp_kernel=[32], conv_kernel=[24],
+<<<<<<< HEAD
                  isometric_kernel=[18, 6], device='npu'):
+=======
+                 isometric_kernel=[18, 6], device='cuda'):
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         super(MIC, self).__init__()
         self.conv_kernel = conv_kernel
         self.device = device
@@ -89,7 +93,11 @@ class MIC(nn.Module):
 
 class SeasonalPrediction(nn.Module):
     def __init__(self, embedding_size=512, n_heads=8, dropout=0.05, d_layers=1, decomp_kernel=[32], c_out=1,
+<<<<<<< HEAD
                  conv_kernel=[2, 4], isometric_kernel=[18, 6], device='npu'):
+=======
+                 conv_kernel=[2, 4], isometric_kernel=[18, 6], device='cuda'):
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         super(SeasonalPrediction, self).__init__()
 
         self.mic = nn.ModuleList([MIC(feature_size=embedding_size, n_heads=n_heads,
@@ -140,7 +148,11 @@ class Model(nn.Module):
                                              dropout=configs.dropout,
                                              d_layers=configs.d_layers, decomp_kernel=decomp_kernel,
                                              c_out=configs.c_out, conv_kernel=conv_kernel,
+<<<<<<< HEAD
                                              isometric_kernel=isometric_kernel, device=torch.device('npu:0'))
+=======
+                                             isometric_kernel=isometric_kernel, device=torch.device('cuda:0'))
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             # refer to DLinear
             self.regression = nn.Linear(configs.seq_len, configs.pred_len)
@@ -164,9 +176,13 @@ class Model(nn.Module):
         # embedding
         zeros = torch.zeros([x_dec.shape[0], self.pred_len, x_dec.shape[2]], device=x_enc.device)
         seasonal_init_dec = torch.cat([seasonal_init_enc[:, -self.seq_len:, :], zeros], dim=1)
+<<<<<<< HEAD
         # 对齐时间特征：decoder 需要与 seasonal_init_dec 等长的时间戳
         x_mark_dec_full = torch.cat([x_mark_enc[:, -self.seq_len:, :], x_mark_dec], dim=1)
         dec_out = self.dec_embedding(seasonal_init_dec, x_mark_dec_full)
+=======
+        dec_out = self.dec_embedding(seasonal_init_dec, x_mark_dec)
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         dec_out = self.conv_trans(dec_out)
         dec_out = dec_out[:, -self.pred_len:, :] + trend[:, -self.pred_len:, :]
         return dec_out
@@ -209,6 +225,10 @@ class Model(nn.Module):
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+<<<<<<< HEAD
+=======
+            print(x_enc.shape, x_mark_enc.shape, x_dec.shape, x_mark_dec.shape)
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':

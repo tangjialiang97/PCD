@@ -30,6 +30,7 @@ def MAPE(pred, true):
 def MSPE(pred, true):
     return np.mean(np.square((true - pred) / true))
 
+<<<<<<< HEAD
 def _as_ymax_array(ymax, pred):
     if isinstance(ymax, (list, tuple, np.ndarray)):
         ymax_arr = np.asarray(ymax, dtype=np.float32)
@@ -74,3 +75,24 @@ def metric(pred, true, ymax):
         nrmse = nRMSE(pred, true, ymax=ymax)
         nmae = nMAE(pred, true, ymax=ymax)
         return mae, mse, nrmse, nmae
+=======
+def nRMSE(pred, true, ymax=400):
+    return np.sqrt(np.mean((true - pred) ** 2)) / ymax
+
+def nMAE(pred, true, ymax=400):
+    return np.mean(np.abs(true - pred)) / ymax
+
+def metric(pred, true):
+    mae = MAE(pred, true)
+    mse = MSE(pred, true)
+    nrmse = nRMSE(pred, true, ymax=1366)
+    nmae = nMAE(pred, true, ymax=1366)
+    return mae, mse, nrmse, nmae
+
+def metric_with_ymax(pred, true, ymax):
+    mae = MAE(pred, true)
+    mse = MSE(pred, true)
+    nrmse = nRMSE(pred, true, ymax=ymax)
+    nmae = nMAE(pred, true, ymax=ymax)
+    return mae, mse, nrmse, nmae
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1

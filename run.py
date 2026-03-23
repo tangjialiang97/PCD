@@ -102,6 +102,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss', type=str, default='MSE', help='loss function')
     parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
     parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
+<<<<<<< HEAD
     parser.add_argument('--use_auxiliary', action='store_true', help='use auxiliary loss', default=False)
     parser.add_argument('--closure_weight', type=float, default=1.0, help='closure weight')
     parser.add_argument('--limit_weight', type=float, default=1.0, help='limit weight')
@@ -109,13 +110,21 @@ if __name__ == '__main__':
     parser.add_argument('--var_gamma', type=float, default=0.1, help='variability gamma')
     parser.add_argument('--var_weight', type=float, default=1.0, help='variability weight')
     parser.add_argument('--closure_warmup_epochs', type=int, default=2, help='closure warmup epochs')
+=======
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
     # GPU
     parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
     parser.add_argument('--gpu', type=int, default=0, help='gpu')
+<<<<<<< HEAD
     parser.add_argument('--gpu_type', type=str, default='npu', help='gpu type')  # npu or mps
     parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple gpus', default=False)
     parser.add_argument('--devices', type=str, default='0,1,2,3,4,5,6,7', help='device ids of multile gpus')
+=======
+    parser.add_argument('--gpu_type', type=str, default='cuda', help='gpu type')  # cuda or mps
+    parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple gpus', default=False)
+    parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
     # de-stationary projector params
     parser.add_argument('--p_hidden_dims', type=int, nargs='+', default=[128, 128],
@@ -173,8 +182,13 @@ if __name__ == '__main__':
     parser.add_argument('--pos', type=int, choices=[0, 1], default=1, help='Positional Embedding. Set pos to 0 or 1')
 
     args = parser.parse_args()
+<<<<<<< HEAD
     if torch.npu.is_available() and args.use_gpu:
         args.device = torch.device('npu:{}'.format(args.gpu))
+=======
+    if torch.cuda.is_available() and args.use_gpu:
+        args.device = torch.device('cuda:{}'.format(args.gpu))
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
         print('Using GPU')
     else:
         if hasattr(torch.backends, "mps"):
@@ -213,7 +227,11 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             # setting record of experiments
             exp = Exp(args)  # set experiments
+<<<<<<< HEAD
             setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}_{}_cw{}_lw{}_sc{}_vg{}_vw{}'.format(
+=======
+            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 args.task_name,
                 args.model_id,
                 args.model,
@@ -232,7 +250,11 @@ if __name__ == '__main__':
                 args.factor,
                 args.embed,
                 args.distil,
+<<<<<<< HEAD
                 args.des, ii, args.use_auxiliary, args.closure_weight, args.limit_weight, args.solar_constant, args.var_gamma, args.var_weight)
+=======
+                args.des, ii)
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
@@ -241,12 +263,21 @@ if __name__ == '__main__':
             exp.test(setting)
             if args.gpu_type == 'mps':
                 torch.backends.mps.empty_cache()
+<<<<<<< HEAD
             elif args.gpu_type == 'npu':
                 torch.npu.empty_cache()
     else:
         exp = Exp(args)  # set experiments
         ii = 0
         setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}_{}_cw{}_lw{}_sc{}_vg{}_vw{}'.format(
+=======
+            elif args.gpu_type == 'cuda':
+                torch.cuda.empty_cache()
+    else:
+        exp = Exp(args)  # set experiments
+        ii = 0
+        setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
             args.task_name,
             args.model_id,
             args.model,
@@ -265,11 +296,20 @@ if __name__ == '__main__':
             args.factor,
             args.embed,
             args.distil,
+<<<<<<< HEAD
             args.des, ii, args.use_auxiliary, args.closure_weight, args.limit_weight, args.solar_constant, args.var_gamma, args.var_weight)
+=======
+            args.des, ii)
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.test(setting, test=1)
         if args.gpu_type == 'mps':
             torch.backends.mps.empty_cache()
+<<<<<<< HEAD
         elif args.gpu_type == 'npu':
             torch.npu.empty_cache()
+=======
+        elif args.gpu_type == 'cuda':
+            torch.cuda.empty_cache()
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1

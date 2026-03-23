@@ -43,10 +43,17 @@ class Decomposition(nn.Module):
         self.eps = 1e-5
 
         self.dwt = DWT1DForward(wave=self.wavelet_name, J=self.level,
+<<<<<<< HEAD
                                 use_amp=self.use_amp).npu() if self.device.type == 'npu' else DWT1DForward(
             wave=self.wavelet_name, J=self.level, use_amp=self.use_amp)
         self.idwt = DWT1DInverse(wave=self.wavelet_name,
                                  use_amp=self.use_amp).npu() if self.device.type == 'npu' else DWT1DInverse(
+=======
+                                use_amp=self.use_amp).cuda() if self.device.type == 'cuda' else DWT1DForward(
+            wave=self.wavelet_name, J=self.level, use_amp=self.use_amp)
+        self.idwt = DWT1DInverse(wave=self.wavelet_name,
+                                 use_amp=self.use_amp).cuda() if self.device.type == 'cuda' else DWT1DInverse(
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
             wave=self.wavelet_name, use_amp=self.use_amp)
 
         self.input_w_dim = self._dummy_forward(self.input_length) if not self.no_decomposition else [
@@ -384,7 +391,11 @@ def afb1d(x, h0, h1, use_amp, mode='zero', dim=-1):
         x = roll(x, -L2, dim=d)
         pad = (L - 1, 0) if d == 2 else (0, L - 1)
         if use_amp:
+<<<<<<< HEAD
             with torch.npu.amp.autocast():  # for mixed precision
+=======
+            with torch.cuda.amp.autocast():  # for mixed precision
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
         else:
             lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
@@ -409,7 +420,11 @@ def afb1d(x, h0, h1, use_amp, mode='zero', dim=-1):
             pad = (p // 2, 0) if d == 2 else (0, p // 2)
             # Calculate the high and lowpass
             if use_amp:
+<<<<<<< HEAD
                 with torch.npu.amp.autocast():
+=======
+                with torch.cuda.amp.autocast():
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                     lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
             else:
                 lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
@@ -417,7 +432,11 @@ def afb1d(x, h0, h1, use_amp, mode='zero', dim=-1):
             pad = (0, 0, p // 2, (p + 1) // 2) if d == 2 else (p // 2, (p + 1) // 2, 0, 0)
             x = mypad(x, pad=pad, mode=mode)
             if use_amp:
+<<<<<<< HEAD
                 with torch.npu.amp.autocast():
+=======
+                with torch.cuda.amp.autocast():
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                     lohi = F.conv2d(x, h, stride=s, groups=C)
             else:
                 lohi = F.conv2d(x, h, stride=s, groups=C)
@@ -506,7 +525,11 @@ def sfb1d(lo, hi, g0, g1, use_amp, mode='zero', dim=-1):
     g1 = torch.cat([g1] * C, dim=0)
     if mode == 'per' or mode == 'periodization':
         if use_amp:
+<<<<<<< HEAD
             with torch.npu.amp.autocast():
+=======
+            with torch.cuda.amp.autocast():
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 y = F.conv_transpose2d(lo, g0, stride=s, groups=C) + \
                     F.conv_transpose2d(hi, g1, stride=s, groups=C)
         else:
@@ -524,7 +547,11 @@ def sfb1d(lo, hi, g0, g1, use_amp, mode='zero', dim=-1):
                 mode == 'periodic':
             pad = (L - 2, 0) if d == 2 else (0, L - 2)
             if use_amp:
+<<<<<<< HEAD
                 with torch.npu.amp.autocast():
+=======
+                with torch.cuda.amp.autocast():
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                     y = F.conv_transpose2d(lo, g0, stride=s, padding=pad, groups=C) + \
                         F.conv_transpose2d(hi, g1, stride=s, padding=pad, groups=C)
             else:

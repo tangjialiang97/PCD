@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 ymax_dict = {
     'Stanford': 29.5,
     'Irr': 1366,
+<<<<<<< HEAD
     'DE_wind_offshore.csv': [5742.0, 6901.0],
     'DE_wind_onshore.csv': [44710.0, 40752.0],
     'DE_wind.csv': [50452.0, 46064.0],
@@ -16,6 +17,15 @@ ymax_dict = {
     'Location2.csv': [95.4, 100, 76.6, 18.27, 24.59, 360, 360, 29.0, 0.9859],
     'Location3.csv': [101.7, 100, 78.7, 18.53, 24.2, 360, 360, 26.6, 0.9994],
     'Location4.csv': [93.8, 100, 77.9, 14.26, 21.75, 360, 360, 26.4, 0.9888],
+=======
+    'DE_wind_offshore.csv': 6990.36,
+    'DE_wind_onshore.csv': 40929.67,
+    'DE_wind.csv': 46205.63,
+    'Location1.csv': 0.9913,
+    'Location2.csv': 0.9859,
+    'Location3.csv': 0.9994,
+    'Location4.csv': 0.9888,
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
     'bj1.csv': 500,
     'Aotizhongxin.csv': 898,
     'Changping.csv': 882,
@@ -48,16 +58,34 @@ ymax_dict = {
     'CCG.csv': 6.71,
     'CRNN.csv': 25.85,
     'MRD.csv': 15.28,
+<<<<<<< HEAD
     'flowedb5.csv': [95.0, 84.2, 360.0, 18900.0],
     'flowedb2.csv': [101.0, 87.8, 360.0, 2150.0],
     'flowedb3.csv': [105.0, 82.0, 360.0, 347000.0],
     'flowedb4.csv': [105.0, 82.0, 360.0, 347000.0],
+=======
+    'flowedb1.csv': 20600.0,
+    'flowedb2.csv': 2150.0,
+    'flowedb3.csv': 347000.0,
+    'flowedb4.csv': 1740.0,
+    'flowedb5.csv': 18900.0,
+    'flowedb7.csv': 26800.0,
+    'flowedb8.csv': 310.0,
+    'flowedb9.csv': 13700.0,
+    'flowedb10.csv': 7400.0,
+    'flowedb11.csv': 1300.0,
+    'flowedb12.csv': 7300.0,
+    'flowedb13.csv': 8400.0,
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
     '13PV1.csv': 1016.84,
     '13PV2.csv': 1051.16,
     '13PV3.csv': 1021.69,
     '13PV4.csv': 1027.86,
     'folsom.csv': 1366,
+<<<<<<< HEAD
     'Folsom_combined_no_zero.csv': 1366,
+=======
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
     'stanford.csv': 29.5,
 }
 
@@ -163,7 +191,11 @@ def data_provider(args, flag):
                 stride_minutes=10,
                 features=args.features,
                 target='ghi_5min',
+<<<<<<< HEAD
                 scale=True,
+=======
+                scale=False,
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 timeenc=0,
                 freq='5t'
             )
@@ -247,7 +279,11 @@ def data_provider(args, flag):
                 args,
                 root_path=args.root_path,
                 flag=flag,
+<<<<<<< HEAD
                 features=args.features,
+=======
+                features='S',
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 data_path=args.data_path,
                 sample_interval=sample_interval,
                 target='target',
@@ -264,7 +300,11 @@ def data_provider(args, flag):
             )
             return data_set, data_loader
         elif args.data == 'Water':
+<<<<<<< HEAD
             if "flowedb" in args.data_path:
+=======
+            if "flowedb1" in args.data_path:
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 sample_interval = 1
             else:
                 sample_interval = 4
@@ -272,7 +312,11 @@ def data_provider(args, flag):
                 args,
                 root_path=args.root_path,
                 flag=flag,
+<<<<<<< HEAD
                 features=args.features,
+=======
+                features='S',
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 data_path=args.data_path,
                 sample_interval=sample_interval,
                 target='target',
@@ -291,6 +335,7 @@ def data_provider(args, flag):
         elif args.data == 'Solar':
             if "folsom" in args.data_path:
                 target = 'ghi'
+<<<<<<< HEAD
                 sample_interval = 60
             elif "Folsom_combined_no_zero" in args.data_path:
                 target = 'ghi'
@@ -298,15 +343,28 @@ def data_provider(args, flag):
             else:
                 target = 'target'
                 sample_interval = 30
+=======
+            else:
+                target = 'target'
+            sample_interval = 4
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
             data_set = Data(
                 args,
                 root_path=args.root_path,
                 flag=flag,
+<<<<<<< HEAD
                 features=args.features,
                 data_path=args.data_path,
                 sample_interval=sample_interval,
                 target=target,
                 scale=False,
+=======
+                features='S',
+                data_path=args.data_path,
+                sample_interval=sample_interval,
+                target=target,
+                scale=True,
+>>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 timeenc=0,
                 ymax=ymax_dict[args.data_path]
             )
