@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import os
 import torch
 import torch.backends
@@ -40,9 +41,9 @@ if __name__ == '__main__':
     parser.add_argument('--checkpoints', type=str, default='./checkpoints/', help='location of model checkpoints')
 
     # forecasting task
-    parser.add_argument('--seq_len', type=int, default=96, help='input sequence length')
+    parser.add_argument('--seq_len', type=int, default=96, help='icudat sequence length')
     parser.add_argument('--label_len', type=int, default=48, help='start token length')
-    parser.add_argument('--seq_len_hours', type=int, default=18, help='input sequence length in hours')
+    parser.add_argument('--seq_len_hours', type=int, default=18, help='icudat sequence length in hours')
     parser.add_argument('--pred_len_hours', type=int, default=6, help='prediction sequence length in hours')
     parser.add_argument('--label_len_hours', type=int, default=0, help='start token length in hours')
     parser.add_argument('--pred_len', type=int, default=96, help='prediction sequence length')
@@ -51,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_path_trainval', type=str, default='trainval_timestamp_target.csv', help='data file')
     parser.add_argument('--data_path_test', type=str, default='test_timestamp_target.csv', help='data file')
 
-    # inputation task
+    # icudatation task
     parser.add_argument('--mask_rate', type=float, default=0.25, help='mask ratio')
 
     # anomaly detection task
@@ -62,8 +63,8 @@ if __name__ == '__main__':
     parser.add_argument('--d_conv', type=int, default=4, help='conv kernel size for Mamba')
     parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
     parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
-    parser.add_argument('--enc_in', type=int, default=7, help='encoder input size')
-    parser.add_argument('--dec_in', type=int, default=7, help='decoder input size')
+    parser.add_argument('--enc_in', type=int, default=7, help='encoder icudat size')
+    parser.add_argument('--dec_in', type=int, default=7, help='decoder icudat size')
     parser.add_argument('--c_out', type=int, default=7, help='output size')
     parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
     parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
@@ -95,7 +96,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_workers', type=int, default=10, help='data loader num workers')
     parser.add_argument('--itr', type=int, default=1, help='experiments times')
     parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
-    parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size of train icudat data')
     parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
     parser.add_argument('--learning_rate', type=float, default=0.01, help='optimizer learning rate')
     parser.add_argument('--des', type=str, default='test', help='exp description')
@@ -106,7 +107,7 @@ if __name__ == '__main__':
     # GPU
     parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
     parser.add_argument('--gpu', type=int, default=0, help='gpu')
-    parser.add_argument('--gpu_type', type=str, default='npu', help='gpu type')  # npu or mps
+    parser.add_argument('--gpu_type', type=str, default='cuda', help='gpu type')  # cuda or mps
     parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple gpus', default=False)
     parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
 
@@ -148,6 +149,23 @@ if __name__ == '__main__':
 
     # TimeXer
     parser.add_argument('--patch_len', type=int, default=16, help='patch length')
+    parser.add_argument('--is_three', action='store_true', default=False,
+                        help='report GHI/DNI/DHI metrics and 3-channel average during test')
+    parser.add_argument('--use_internal_physics', action='store_true', default=False,
+                        help='enable internal solar physics constraints')
+    parser.add_argument('--physics_layers', type=int, default=2, help='number of solar physics blocks')
+    parser.add_argument('--physics_hidden_dim', type=int, default=128, help='hidden dimension of solar physics blocks')
+    parser.add_argument('--physics_kernel_size', type=int, default=3, help='temporal kernel size in solar physics blocks')
+    parser.add_argument('--night_cos_threshold', type=float, default=0.0, help='daytime threshold for cosine zenith')
+    parser.add_argument('--physics_eps', type=float, default=1e-4, help='stability epsilon for internal physics projection')
+    parser.add_argument('--physics_gated_feedback', action='store_true', default=False,
+                        help='enable gated feedback for SolarPhysicsBlock temporal updates')
+    parser.add_argument('--physics_use_weak_upper_bound', action='store_true', default=False,
+                        help='enable a simplified cosz-based physical upper bound inside SolarPhysicsProjection')
+    parser.add_argument('--physics_upper_bound_alpha_min', type=float, default=0.8,
+                        help='lower bound of learnable alpha for the simplified physical upper bound')
+    parser.add_argument('--physics_upper_bound_alpha_max', type=float, default=1.2,
+                        help='upper bound of learnable alpha for the simplified physical upper bound')
 
     # GCN
     parser.add_argument('--node_dim', type=int, default=10, help='each node embbed to dim dimentions')
@@ -166,8 +184,8 @@ if __name__ == '__main__':
     parser.add_argument('--pos', type=int, choices=[0, 1], default=1, help='Positional Embedding. Set pos to 0 or 1')
 
     args = parser.parse_args()
-    if torch.npu.is_available() and args.use_gpu:
-        args.device = torch.device('npu:{}'.format(args.gpu))
+    if torch.cuda.is_available() and args.use_gpu:
+        args.device = torch.device('cuda:{}'.format(args.gpu))
         print('Using GPU')
     else:
         if hasattr(torch.backends, "mps"):
@@ -181,6 +199,9 @@ if __name__ == '__main__':
         device_ids = args.devices.split(',')
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
+
+    if args.model.endswith('SolarPhysics'):
+        args.use_internal_physics = True
 
     print('Args in experiment:')
     print_args(args)
@@ -202,9 +223,28 @@ if __name__ == '__main__':
     else:
         Exp = Exp_Long_Term_Forecast
 
+    def shorten_setting(raw_setting, ii):
+        max_setting_len = 220
+        if len(raw_setting) <= max_setting_len:
+            return raw_setting
+
+        prefix_parts = [
+            args.task_name,
+            args.model_id,
+            args.model,
+            args.data,
+            'pl{}'.format(args.pred_len),
+            args.des,
+            'i{}'.format(ii),
+        ]
+        prefix = '_'.join(str(part) for part in prefix_parts if str(part))
+        prefix = prefix[:120].rstrip('_')
+        digest = hashlib.md5(raw_setting.encode('utf-8')).hexdigest()[:10]
+        return '{}_h{}'.format(prefix, digest)
+
     exp = Exp(args)  # set experiments
     ii = 0
-    setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
+    raw_setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
         args.task_name,
         args.model_id,
         args.model,
@@ -224,10 +264,28 @@ if __name__ == '__main__':
         args.embed,
         args.distil,
         args.des, ii)
+    physics_parts = []
+    if int(getattr(args, 'physics_kernel_size', 3)) != 3:
+        physics_parts.append('pks{}'.format(args.physics_kernel_size))
+    if float(getattr(args, 'night_cos_threshold', 0.0)) != 0.0:
+        physics_parts.append('nct{}'.format(args.night_cos_threshold))
+    if bool(getattr(args, 'physics_gated_feedback', False)):
+        physics_parts.append('pgf1')
+    if bool(getattr(args, 'physics_use_weak_upper_bound', False)):
+        physics_parts.append('pub1')
+    if float(getattr(args, 'physics_upper_bound_alpha_min', 0.8)) != 0.8:
+        physics_parts.append('pual{}'.format(args.physics_upper_bound_alpha_min))
+    if float(getattr(args, 'physics_upper_bound_alpha_max', 1.2)) != 1.2:
+        physics_parts.append('puah{}'.format(args.physics_upper_bound_alpha_max))
+    if getattr(args, 'extra_tag', ''):
+        physics_parts.append('xt{}'.format(args.extra_tag))
+    if physics_parts:
+        raw_setting = raw_setting + '_' + '_'.join(physics_parts)
+    setting = shorten_setting(raw_setting, ii)
 
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     exp.test(setting, test=1)
     if args.gpu_type == 'mps':
         torch.backends.mps.empty_cache()
-    elif args.gpu_type == 'npu':
-        torch.npu.empty_cache()
+    elif args.gpu_type == 'cuda':
+        torch.cuda.empty_cache()

@@ -98,18 +98,18 @@ def write_csv(records: list[Record], out_path: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument(
-        "--input",
+        "--icudat",
         required=True,
         help="Path to result_*.txt",
     )
     ap.add_argument(
         "--output",
         default=None,
-        help="Path to output .csv (default: same name as input with .csv)",
+        help="Path to output .csv (default: same name as icudat with .csv)",
     )
     args = ap.parse_args()
 
-    in_path = os.path.abspath(args.input)
+    in_path = os.path.abspath(args.icudat)
     out_path = os.path.abspath(
         args.output if args.output else os.path.splitext(in_path)[0] + ".csv"
     )

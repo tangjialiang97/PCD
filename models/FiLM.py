@@ -5,11 +5,7 @@ import numpy as np
 from scipy import signal
 from scipy import special as ss
 
-<<<<<<< HEAD
-device = torch.device("npu:0" if torch.npu.is_available() else "cpu")
-=======
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
 
 def transition(N):
@@ -42,14 +38,14 @@ class HiPPO_LegT(nn.Module):
         self.register_buffer('eval_matrix', torch.Tensor(
             ss.eval_legendre(np.arange(N)[:, None], 1 - 2 * vals).T).to(device))
 
-    def forward(self, inputs):
+    def forward(self, icudats):
         """
-        inputs : (length, ...)
+        icudats : (length, ...)
         output : (length, ..., N) where N is the order of the HiPPO projection
         """
-        c = torch.zeros(inputs.shape[:-1] + tuple([self.N])).to(device)
+        c = torch.zeros(icudats.shape[:-1] + tuple([self.N])).to(device)
         cs = []
-        for f in inputs.permute([-1, 0, 1]):
+        for f in icudats.permute([-1, 0, 1]):
             f = f.unsqueeze(-1)
             new = f @ self.B.unsqueeze(0)
             c = F.linear(c, self.A) + new

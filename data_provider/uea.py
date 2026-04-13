@@ -5,16 +5,16 @@ import torch
 
 
 def collate_fn(data, max_len=None):
-    """Build mini-batch tensors from a list of (X, mask) tuples. Mask input. Create
+    """Build mini-batch tensors from a list of (X, mask) tuples. Mask icudat. Create
     Args:
         data: len(batch_size) list of tuples (X, y).
             - X: torch tensor of shape (seq_length, feat_dim); variable seq_length.
             - y: torch tensor of shape (num_labels,) : class indices or numerical targets
                 (for classification or regression, respectively). num_labels > 1 for multi-task models
-        max_len: global fixed sequence length. Used for architectures requiring fixed length input,
+        max_len: global fixed sequence length. Used for architectures requiring fixed length icudat,
             where the batch length cannot vary dynamically. Longer sequences are clipped, shorter are padded with 0s
     Returns:
-        X: (batch_size, padded_length, feat_dim) torch tensor of masked features (input)
+        X: (batch_size, padded_length, feat_dim) torch tensor of masked features (icudat)
         targets: (batch_size, padded_length, feat_dim) torch tensor of unmasked features (output)
         target_masks: (batch_size, padded_length, feat_dim) boolean torch tensor
             0 indicates masked values to be predicted, 1 indicates unaffected/"active" feature values
@@ -78,7 +78,7 @@ class Normalizer(object):
     def normalize(self, df):
         """
         Args:
-            df: input dataframe
+            df: icudat dataframe
         Returns:
             df: normalized dataframe
         """

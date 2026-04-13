@@ -170,7 +170,7 @@ class PatchEmbedding(nn.Module):
         self.stride = stride
         self.padding_patch_layer = nn.ReplicationPad1d((0, padding))
 
-        # Backbone, Input encoding: projection of feature vectors onto a d-dim vector space
+        # Backbone, Icudat encoding: projection of feature vectors onto a d-dim vector space
         self.value_embedding = nn.Linear(patch_len, d_model, bias=False)
 
         # Positional embedding
@@ -185,6 +185,6 @@ class PatchEmbedding(nn.Module):
         x = self.padding_patch_layer(x)
         x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)
         x = torch.reshape(x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3]))
-        # Input encoding
+        # Icudat encoding
         x = self.value_embedding(x) + self.position_embedding(x)
         return self.dropout(x), n_vars

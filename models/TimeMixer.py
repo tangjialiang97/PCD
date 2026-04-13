@@ -286,7 +286,7 @@ class Model(nn.Module):
                 out2_list.append(x_2)
             return (out1_list, out2_list)
 
-    def __multi_scale_process_inputs(self, x_enc, x_mark_enc):
+    def __multi_scale_process_icudats(self, x_enc, x_mark_enc):
         if self.configs.down_sampling_method == 'max':
             down_pool = torch.nn.MaxPool1d(self.configs.down_sampling_window, return_indices=False)
         elif self.configs.down_sampling_method == 'avg':
@@ -299,6 +299,10 @@ class Model(nn.Module):
                                   padding_mode='circular',
                                   bias=False)
         else:
+            # Keep the no-downsampling path shape-compatible with the branches
+            # below: forecast/imputation expect lists of multi-scale tensors.
+            x_enc = [x_enc]
+            x_mark_enc = [x_mark_enc] if x_mark_enc is not None else None
             return x_enc, x_mark_enc
         # B,T,C -> B,C,T
         x_enc = x_enc.permute(0, 2, 1)
@@ -328,7 +332,7 @@ class Model(nn.Module):
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
 
-        x_enc, x_mark_enc = self.__multi_scale_process_inputs(x_enc, x_mark_enc)
+        x_enc, x_mark_enc = self.__multi_scale_process_icudats(x_enc, x_mark_enc)
 
         x_list = []
         x_mark_list = []
@@ -396,7 +400,7 @@ class Model(nn.Module):
         return dec_out_list
 
     def classification(self, x_enc, x_mark_enc):
-        x_enc, _ = self.__multi_scale_process_inputs(x_enc, None)
+        x_enc, _ = self.__multi_scale_process_icudats(x_enc, None)
         x_list = x_enc
 
         # embedding
@@ -423,7 +427,7 @@ class Model(nn.Module):
 
     def anomaly_detection(self, x_enc):
         B, T, N = x_enc.size()
-        x_enc, _ = self.__multi_scale_process_inputs(x_enc, None)
+        x_enc, _ = self.__multi_scale_process_icudats(x_enc, None)
 
         x_list = []
 
@@ -461,7 +465,7 @@ class Model(nn.Module):
         x_enc /= stdev
 
         B, T, N = x_enc.size()
-        x_enc, x_mark_enc = self.__multi_scale_process_inputs(x_enc, x_mark_enc)
+        x_enc, x_mark_enc = self.__multi_scale_process_icudats(x_enc, x_mark_enc)
 
         x_list = []
         x_mark_list = []

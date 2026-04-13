@@ -72,9 +72,9 @@ class Model(nn.Module):
         self.enc = KANADModel(window=self.seq_len, order=configs.d_model)
 
     def anomaly_detection(self, x_enc):
-        ## reshape the input [B, L, D] to [B * D, L]
-        x_input = rearrange(x_enc, "B L D -> (B D) L")
-        enc_out = self.enc(x_input)
+        ## reshape the icudat [B, L, D] to [B * D, L]
+        x_icudat = rearrange(x_enc, "B L D -> (B D) L")
+        enc_out = self.enc(x_icudat)
         # [B * D, L]
         dec_out = rearrange(enc_out, "(B D) L -> B L D", B=x_enc.size(0))
         # [B, L, D]

@@ -73,8 +73,8 @@ class KPLayer(nn.Module):
         self.K = None # B E E
 
     def one_step_forward(self, z, return_rec=False, return_K=False):
-        B, input_len, E = z.shape
-        assert input_len > 1, 'snapshots number should be larger than 1'
+        B, icudat_len, E = z.shape
+        assert icudat_len > 1, 'snapshots number should be larger than 1'
         x, y = z[:, :-1], z[:, 1:]
 
         # solve linear system
@@ -115,8 +115,8 @@ class KPLayerApprox(nn.Module):
         # z:       B L E, koopman invariance space representation
         # z_rec:   B L E, reconstructed representation
         # z_pred:  B S E, forecasting representation
-        B, input_len, E = z.shape
-        assert input_len > 1, 'snapshots number should be larger than 1'
+        B, icudat_len, E = z.shape
+        assert icudat_len > 1, 'snapshots number should be larger than 1'
         x, y = z[:, :-1], z[:, 1:]
 
         # solve linear system
@@ -128,19 +128,19 @@ class KPLayerApprox(nn.Module):
 
         z_rec = torch.cat((z[:, :1], torch.bmm(x, self.K)), dim=1) # B L E
         
-        if pred_len <= input_len:
+        if pred_len <= icudat_len:
             self.K_step = torch.linalg.matrix_power(self.K, pred_len)
             if torch.isnan(self.K_step).any():
                 print('Encounter multistep K with nan, replace it by identity matrix')
                 self.K_step = torch.eye(self.K_step.shape[1]).to(self.K_step.device).unsqueeze(0).repeat(B, 1, 1)
             z_pred = torch.bmm(z[:, -pred_len:, :], self.K_step)
         else:
-            self.K_step = torch.linalg.matrix_power(self.K, input_len)
+            self.K_step = torch.linalg.matrix_power(self.K, icudat_len)
             if torch.isnan(self.K_step).any():
                 print('Encounter multistep K with nan, replace it by identity matrix')
                 self.K_step = torch.eye(self.K_step.shape[1]).to(self.K_step.device).unsqueeze(0).repeat(B, 1, 1)
             temp_z_pred, all_pred = z, []
-            for _ in range(math.ceil(pred_len / input_len)):
+            for _ in range(math.ceil(pred_len / icudat_len)):
                 temp_z_pred = torch.bmm(temp_z_pred, self.K_step)
                 all_pred.append(temp_z_pred)
             z_pred = torch.cat(all_pred, dim=1)[:, :pred_len, :]
@@ -155,7 +155,7 @@ class TimeVarKP(nn.Module):
     """
     def __init__(self,
                  enc_in=8,
-                 input_len=96,
+                 icudat_len=96,
                  pred_len=96,
                  seg_len=24,
                  dynamic_dim=128,
@@ -164,16 +164,16 @@ class TimeVarKP(nn.Module):
                  multistep=False,
                 ):
         super(TimeVarKP, self).__init__()
-        self.input_len = input_len
+        self.icudat_len = icudat_len
         self.pred_len = pred_len
         self.enc_in = enc_in
         self.seg_len = seg_len
         self.dynamic_dim = dynamic_dim
         self.multistep = multistep
         self.encoder, self.decoder = encoder, decoder            
-        self.freq = math.ceil(self.input_len / self.seg_len)  # segment number of input
+        self.freq = math.ceil(self.icudat_len / self.seg_len)  # segment number of icudat
         self.step = math.ceil(self.pred_len / self.seg_len)   # segment number of output
-        self.padding_len = self.seg_len * self.freq - self.input_len
+        self.padding_len = self.seg_len * self.freq - self.icudat_len
         # Approximate mulitstep K by KPLayerApprox when pred_len is large
         self.dynamics = KPLayerApprox() if self.multistep else KPLayer() 
 
@@ -191,7 +191,7 @@ class TimeVarKP(nn.Module):
 
         x_rec = self.decoder(x_rec) # B F PC
         x_rec = x_rec.reshape(B, self.freq, self.seg_len, self.enc_in)
-        x_rec = x_rec.reshape(B, -1, self.enc_in)[:, :self.input_len, :]  # B L C
+        x_rec = x_rec.reshape(B, -1, self.enc_in)[:, :self.icudat_len, :]  # B L C
         
         x_pred = self.decoder(x_pred)     # B S PC
         x_pred = x_pred.reshape(B, self.step, self.seg_len, self.enc_in)
@@ -206,14 +206,14 @@ class TimeInvKP(nn.Module):
     Utilize lookback and forecast window snapshots to predict the future of time-invariant term
     """
     def __init__(self,
-                 input_len=96,
+                 icudat_len=96,
                  pred_len=96,
                  dynamic_dim=128,
                  encoder=None,
                  decoder=None):
         super(TimeInvKP, self).__init__()
         self.dynamic_dim = dynamic_dim
-        self.input_len = input_len
+        self.icudat_len = icudat_len
         self.pred_len = pred_len
         self.encoder = encoder
         self.decoder = decoder
@@ -252,7 +252,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.enc_in = configs.enc_in
-        self.input_len = configs.seq_len
+        self.icudat_len = configs.seq_len
         self.pred_len = configs.pred_len
 
         self.seg_len = self.pred_len
@@ -267,12 +267,12 @@ class Model(nn.Module):
         self.disentanglement = FourierFilter(self.mask_spectrum)
 
         # shared encoder/decoder to make koopman embedding consistent
-        self.time_inv_encoder = MLP(f_in=self.input_len, f_out=self.dynamic_dim, activation='relu',
+        self.time_inv_encoder = MLP(f_in=self.icudat_len, f_out=self.dynamic_dim, activation='relu',
                     hidden_dim=self.hidden_dim, hidden_layers=self.hidden_layers)
         self.time_inv_decoder = MLP(f_in=self.dynamic_dim, f_out=self.pred_len, activation='relu',
                            hidden_dim=self.hidden_dim, hidden_layers=self.hidden_layers)
         self.time_inv_kps = self.time_var_kps = nn.ModuleList([
-                                TimeInvKP(input_len=self.input_len,
+                                TimeInvKP(icudat_len=self.icudat_len,
                                     pred_len=self.pred_len, 
                                     dynamic_dim=self.dynamic_dim,
                                     encoder=self.time_inv_encoder, 
@@ -286,7 +286,7 @@ class Model(nn.Module):
                            hidden_dim=self.hidden_dim, hidden_layers=self.hidden_layers)
         self.time_var_kps = nn.ModuleList([
                     TimeVarKP(enc_in=configs.enc_in,
-                        input_len=self.input_len,
+                        icudat_len=self.icudat_len,
                         pred_len=self.pred_len,
                         seg_len=self.seg_len,
                         dynamic_dim=self.dynamic_dim,
@@ -317,9 +317,9 @@ class Model(nn.Module):
         # Koopman Forecasting
         residual, forecast = x_enc, None
         for i in range(self.num_blocks):
-            time_var_input, time_inv_input = self.disentanglement(residual)
-            time_inv_output = self.time_inv_kps[i](time_inv_input)
-            time_var_backcast, time_var_output = self.time_var_kps[i](time_var_input)
+            time_var_icudat, time_inv_icudat = self.disentanglement(residual)
+            time_inv_output = self.time_inv_kps[i](time_inv_icudat)
+            time_var_backcast, time_var_output = self.time_var_kps[i](time_var_icudat)
             residual = residual - time_var_backcast
             if forecast is None:
                 forecast = (time_inv_output + time_var_output)

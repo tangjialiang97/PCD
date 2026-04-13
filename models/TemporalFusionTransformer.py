@@ -12,7 +12,7 @@ from collections import namedtuple
 TypePos = namedtuple('TypePos', ['static', 'observed'])
 
 # When you want to use new dataset, please add the index of 'static, observed' columns here.
-# 'known' columns needn't be added, because 'known' inputs are automatically judged and provided by the program.
+# 'known' columns needn't be added, because 'known' icudats are automatically judged and provided by the program.
 datatype_dict = {'ETTh1': TypePos([], [x for x in range(7)]),
                  'ETTm1': TypePos([], [x for x in range(7)])}
 
@@ -74,26 +74,26 @@ class TFTEmbedding(nn.Module):
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         if self.static_len:
-            # static_input: [B,C,d_model]
-            static_input = torch.stack([embed(x_enc[:,:1,self.static_pos[i]].unsqueeze(-1), None).squeeze(1) for i, embed in enumerate(self.static_embedding)], dim=-2)
+            # static_icudat: [B,C,d_model]
+            static_icudat = torch.stack([embed(x_enc[:,:1,self.static_pos[i]].unsqueeze(-1), None).squeeze(1) for i, embed in enumerate(self.static_embedding)], dim=-2)
         else:
-            static_input = None
+            static_icudat = None
 
-        # observed_input: [B,T,C,d_model]
-        observed_input = torch.stack([embed(x_enc[:,:,self.observed_pos[i]].unsqueeze(-1), None) for i, embed in enumerate(self.observed_embedding)], dim=-2)
+        # observed_icudat: [B,T,C,d_model]
+        observed_icudat = torch.stack([embed(x_enc[:,:,self.observed_pos[i]].unsqueeze(-1), None) for i, embed in enumerate(self.observed_embedding)], dim=-2)
 
         x_mark = torch.cat([x_mark_enc, x_mark_dec[:,-self.pred_len:,:]], dim=-2)
-        # known_input: [B,T,C,d_model]
-        known_input = self.known_embedding(x_mark)
+        # known_icudat: [B,T,C,d_model]
+        known_icudat = self.known_embedding(x_mark)
 
-        return static_input, observed_input, known_input
+        return static_icudat, observed_icudat, known_icudat
 
 
 class GLU(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, icudat_size, output_size):
         super().__init__()
-        self.fc1 = nn.Linear(input_size, output_size)
-        self.fc2 = nn.Linear(input_size, output_size)
+        self.fc1 = nn.Linear(icudat_size, output_size)
+        self.fc2 = nn.Linear(icudat_size, output_size)
         self.glu = nn.GLU()
 
     def forward(self, x):
@@ -103,10 +103,10 @@ class GLU(nn.Module):
 
 
 class GateAddNorm(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, icudat_size, output_size):
         super(GateAddNorm, self).__init__()
-        self.glu = GLU(input_size, input_size)
-        self.projection = nn.Linear(input_size, output_size) if input_size != output_size else nn.Identity()
+        self.glu = GLU(icudat_size, icudat_size)
+        self.projection = nn.Linear(icudat_size, output_size) if icudat_size != output_size else nn.Identity()
         self.layer_norm = nn.LayerNorm(output_size)
 
     def forward(self, x, skip_a):
@@ -116,14 +116,14 @@ class GateAddNorm(nn.Module):
 
 
 class GRN(nn.Module):
-    def __init__(self, input_size, output_size, hidden_size=None, context_size=None, dropout=0.0):
+    def __init__(self, icudat_size, output_size, hidden_size=None, context_size=None, dropout=0.0):
         super(GRN, self).__init__()
-        hidden_size = input_size if hidden_size is None else hidden_size
-        self.lin_a = nn.Linear(input_size, hidden_size)
+        hidden_size = icudat_size if hidden_size is None else hidden_size
+        self.lin_a = nn.Linear(icudat_size, hidden_size)
         self.lin_c = nn.Linear(context_size, hidden_size) if context_size is not None else None
         self.lin_i = nn.Linear(hidden_size, hidden_size)
         self.dropout = nn.Dropout(dropout)
-        self.project_a = nn.Linear(input_size, hidden_size) if hidden_size != input_size else nn.Identity()
+        self.project_a = nn.Linear(icudat_size, hidden_size) if hidden_size != icudat_size else nn.Identity()
         self.gate = GateAddNorm(hidden_size, output_size)
 
     def forward(self, a: Tensor, c: Optional[Tensor] = None):
@@ -164,10 +164,10 @@ class StaticCovariateEncoder(nn.Module):
         self.static_vsn = VariableSelectionNetwork(d_model, static_len) if static_len else None
         self.grns = nn.ModuleList([GRN(d_model, d_model, dropout=dropout) for _ in range(4)])
 
-    def forward(self, static_input):
-        # static_input: [B,C,d]
-        if static_input is not None:
-            static_features = self.static_vsn(static_input)
+    def forward(self, static_icudat):
+        # static_icudat: [B,C,d]
+        if static_icudat is not None:
+            static_features = self.static_vsn(static_icudat)
             return [grn(static_features) for grn in self.grns]
         else:
             return [None] * 4
@@ -222,18 +222,18 @@ class TemporalFusionDecoder(nn.Module):
         self.gate_final = GateAddNorm(configs.d_model, configs.d_model)
         self.out_projection = nn.Linear(configs.d_model, configs.c_out)
 
-    def forward(self, history_input, future_input, c_c, c_h, c_e):
-        # history_input, future_input: [B,T,d]
+    def forward(self, history_icudat, future_icudat, c_c, c_h, c_e):
+        # history_icudat, future_icudat: [B,T,d]
         # c_c, c_h, c_e: [B,d]
         # LSTM
         c = (c_c.unsqueeze(0), c_h.unsqueeze(0)) if c_c is not None and c_h is not None else None
-        historical_features, state = self.history_encoder(history_input, c)
-        future_features, _ = self.future_encoder(future_input, state)
+        historical_features, state = self.history_encoder(history_icudat, c)
+        future_features, _ = self.future_encoder(future_icudat, state)
 
         # Skip connection
-        temporal_input = torch.cat([history_input, future_input], dim=1)
+        temporal_icudat = torch.cat([history_icudat, future_icudat], dim=1)
         temporal_features = torch.cat([historical_features, future_features], dim=1)
-        temporal_features = self.gate_after_lstm(temporal_features, temporal_input)  # [B,T,d]
+        temporal_features = self.gate_after_lstm(temporal_features, temporal_icudat)  # [B,T,d]
 
         # Static enrichment
         enriched_features = self.enrichment_grn(temporal_features, c_e)  # [B,T,d]
@@ -279,22 +279,22 @@ class Model(nn.Module):
         x_enc /= stdev
 
         # Data embedding
-        # static_input: [B,C,d], observed_input:[B,T,C,d], known_input: [B,T,C,d]
-        static_input, observed_input, known_input = self.embedding(x_enc, x_mark_enc, x_dec, x_mark_dec)
+        # static_icudat: [B,C,d], observed_icudat:[B,T,C,d], known_icudat: [B,T,C,d]
+        static_icudat, observed_icudat, known_icudat = self.embedding(x_enc, x_mark_enc, x_dec, x_mark_dec)
 
         # Static context
         # c_s,...,c_e: [B,d]
-        c_s, c_c, c_h, c_e = self.static_encoder(static_input)
+        c_s, c_c, c_h, c_e = self.static_encoder(static_icudat)
 
-        # Temporal input Selection
-        history_input = torch.cat([observed_input, known_input[:,:self.seq_len]], dim=-2)
-        future_input = known_input[:,self.seq_len:]
-        history_input = self.history_vsn(history_input, c_s)
-        future_input = self.future_vsn(future_input, c_s)
+        # Temporal icudat Selection
+        history_icudat = torch.cat([observed_icudat, known_icudat[:,:self.seq_len]], dim=-2)
+        future_icudat = known_icudat[:,self.seq_len:]
+        history_icudat = self.history_vsn(history_icudat, c_s)
+        future_icudat = self.future_vsn(future_icudat, c_s)
 
         # TFT main procedure after variable selection
-        # history_input: [B,T,d], future_input: [B,T,d]
-        dec_out = self.temporal_fusion_decoder(history_input, future_input, c_c, c_h, c_e)
+        # history_icudat: [B,T,d], future_icudat: [B,T,d]
+        dec_out = self.temporal_fusion_decoder(history_icudat, future_icudat, c_c, c_h, c_e)
 
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))

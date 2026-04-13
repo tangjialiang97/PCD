@@ -1,7 +1,0 @@
-prefix=/opt/data/private/code/Time-Series-Library/.conda
-includedir=${prefix}/include
- 
-Name: FontsProto
-Description: Fonts extension headers
-Version: 2.1.3
-Cflags: -I${includedir}

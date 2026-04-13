@@ -52,7 +52,7 @@ class Model(nn.Module):
         # Process in batches to avoid attention mask dimension issues
         outputs = []
         for i in range(B*C):
-            single_input = x_enc[i:i+1]  # Shape: (1, L)
+            single_icudat = x_enc[i:i+1]  # Shape: (1, L)
             
             # Try different approaches: different lengths and with/without num_samples
             success = False
@@ -62,22 +62,22 @@ class Model(nn.Module):
             for attempt_length in attempt_lengths:
                 if attempt_length > L:
                     continue
-                try_input = single_input[:, -attempt_length:]
+                try_icudat = single_icudat[:, -attempt_length:]
                 
                 # First try without num_samples (like TimeMoE)
                 try:
                     output = self.model.generate(
-                        try_input, 
+                        try_icudat, 
                         max_new_tokens=self.pred_len, 
                         use_cache=False
                     )
                     success = True
                     break
                 except (TypeError, RuntimeError):
-                    # Try with inputs keyword and without num_samples
+                    # Try with icudats keyword and without num_samples
                     try:
                         output = self.model.generate(
-                            inputs=try_input, 
+                            icudats=try_icudat, 
                             max_new_tokens=self.pred_len, 
                             use_cache=False
                         )
@@ -87,7 +87,7 @@ class Model(nn.Module):
                         # Try with num_samples=1 (minimal)
                         try:
                             output = self.model.generate(
-                                try_input, 
+                                try_icudat, 
                                 max_new_tokens=self.pred_len, 
                                 num_samples=1, 
                                 use_cache=False
@@ -98,22 +98,22 @@ class Model(nn.Module):
                             continue  # Try next length
             
             if not success:
-                # Last resort: try with original input if it's very short, or minimal length
+                # Last resort: try with original icudat if it's very short, or minimal length
                 if L <= 4:
-                    final_input = single_input
+                    final_icudat = single_icudat
                 else:
-                    final_input = single_input[:, -4:]
+                    final_icudat = single_icudat[:, -4:]
                 
                 try:
                     output = self.model.generate(
-                        final_input, 
+                        final_icudat, 
                         max_new_tokens=self.pred_len, 
                         use_cache=False
                     )
                 except:
-                    # Absolute last resort: try with inputs keyword
+                    # Absolute last resort: try with icudats keyword
                     output = self.model.generate(
-                        inputs=final_input, 
+                        icudats=final_icudat, 
                         max_new_tokens=self.pred_len, 
                         use_cache=False
                     )

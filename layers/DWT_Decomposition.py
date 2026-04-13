@@ -17,7 +17,7 @@ from torch.autograd import Function
 
 class Decomposition(nn.Module):
     def __init__(self,
-                 input_length=[],
+                 icudat_length=[],
                  pred_length=[],
                  wavelet_name=[],
                  level=[],
@@ -30,7 +30,7 @@ class Decomposition(nn.Module):
                  no_decomposition=[],
                  use_amp=[]):
         super(Decomposition, self).__init__()
-        self.input_length = input_length
+        self.icudat_length = icudat_length
         self.pred_length = pred_length
         self.wavelet_name = wavelet_name
         self.level = level
@@ -43,21 +43,14 @@ class Decomposition(nn.Module):
         self.eps = 1e-5
 
         self.dwt = DWT1DForward(wave=self.wavelet_name, J=self.level,
-<<<<<<< HEAD
-                                use_amp=self.use_amp).npu() if self.device.type == 'npu' else DWT1DForward(
-            wave=self.wavelet_name, J=self.level, use_amp=self.use_amp)
-        self.idwt = DWT1DInverse(wave=self.wavelet_name,
-                                 use_amp=self.use_amp).npu() if self.device.type == 'npu' else DWT1DInverse(
-=======
                                 use_amp=self.use_amp).cuda() if self.device.type == 'cuda' else DWT1DForward(
             wave=self.wavelet_name, J=self.level, use_amp=self.use_amp)
         self.idwt = DWT1DInverse(wave=self.wavelet_name,
                                  use_amp=self.use_amp).cuda() if self.device.type == 'cuda' else DWT1DInverse(
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
             wave=self.wavelet_name, use_amp=self.use_amp)
 
-        self.input_w_dim = self._dummy_forward(self.input_length) if not self.no_decomposition else [
-            self.input_length]  # length of the input seq after decompose
+        self.icudat_w_dim = self._dummy_forward(self.icudat_length) if not self.no_decomposition else [
+            self.icudat_length]  # length of the icudat seq after decompose
         self.pred_w_dim = self._dummy_forward(self.pred_length) if not self.no_decomposition else [
             self.pred_length]  # required length of the pred seq after decom
 
@@ -71,7 +64,7 @@ class Decomposition(nn.Module):
             self._init_params()
 
     def transform(self, x):
-        # input: x shape: batch, channel, seq
+        # icudat: x shape: batch, channel, seq
         if not self.no_decomposition:
             yl, yh = self._wavelet_decompose(x)
         else:
@@ -85,8 +78,8 @@ class Decomposition(nn.Module):
             x = yl  # no decompose: returning the same value in x
         return x
 
-    def _dummy_forward(self, input_length):
-        dummy_x = torch.ones((self.batch_size, self.channel, input_length)).to(self.device)
+    def _dummy_forward(self, icudat_length):
+        dummy_x = torch.ones((self.batch_size, self.channel, icudat_length)).to(self.device)
         yl, yh = self.dwt(dummy_x)
         l = []
         l.append(yl.shape[-1])
@@ -99,7 +92,7 @@ class Decomposition(nn.Module):
         self.affine_bias = nn.Parameter(torch.zeros((self.level + 1, self.channel)))
 
     def _wavelet_decompose(self, x):
-        # input: x shape: batch, channel, seq
+        # icudat: x shape: batch, channel, seq
         yl, yh = self.dwt(x)
 
         if self.affine:
@@ -177,7 +170,7 @@ class DWT1DForward(nn.Module):
         """ Forward pass of the DWT.
 
         Args:
-            x (tensor): Input of shape :math:`(N, C_{in}, L_{in})`
+            x (tensor): Icudat of shape :math:`(N, C_{in}, L_{in})`
 
         Returns:
             (yl, yh)
@@ -185,7 +178,7 @@ class DWT1DForward(nn.Module):
                 yh is a list of length J with the first entry
                 being the finest scale coefficients.
         """
-        assert x.ndim == 3, "Can only handle 3d inputs (N, C, L)"
+        assert x.ndim == 3, "Can only handle 3d icudats (N, C, L)"
         highs = []
         x0 = x
         mode = mode_to_int(self.mode)
@@ -235,14 +228,14 @@ class DWT1DInverse(nn.Module):
               match the format returned by DWT1DForward.
 
         Returns:
-            Reconstructed input of shape :math:`(N, C_{in}, L_{in})`
+            Reconstructed icudat of shape :math:`(N, C_{in}, L_{in})`
 
         Note:
             Can have None for any of the highpass scales and will treat the
             values as zeros (not in an efficient way though).
         """
         x0, highs = coeffs
-        assert x0.ndim == 3, "Can only handle 3d inputs (N, C, L)"
+        assert x0.ndim == 3, "Can only handle 3d icudats (N, C, L)"
         mode = mode_to_int(self.mode)
         # Do a multilevel inverse transform
         for x1 in highs[::-1]:
@@ -279,7 +272,7 @@ def mypad(x, pad, mode='constant', value=0):
     """ Function to do numpy like padding on tensors. Only works for 2-D
     padding.
 
-    Inputs:
+    Icudats:
         x (tensor): tensor to pad
         pad (tuple): tuple of (left, right, top, bottom) pad sizes
         mode (str): 'symmetric', 'wrap', 'constant, 'reflect', 'replicate', or
@@ -341,11 +334,11 @@ def mypad(x, pad, mode='constant', value=0):
 def afb1d(x, h0, h1, use_amp, mode='zero', dim=-1):
     """ 1D analysis filter bank (along one dimension only) of an image
 
-    Inputs:
-        x (tensor): 4D input with the last two dimensions the spatial input
-        h0 (tensor): 4D input for the lowpass filter. Should have shape (1, 1,
+    Icudats:
+        x (tensor): 4D icudat with the last two dimensions the spatial icudat
+        h0 (tensor): 4D icudat for the lowpass filter. Should have shape (1, 1,
             h, 1) or (1, 1, 1, w)
-        h1 (tensor): 4D input for the highpass filter. Should have shape (1, 1,
+        h1 (tensor): 4D icudat for the highpass filter. Should have shape (1, 1,
             h, 1) or (1, 1, 1, w)
         mode (str): padding method
         dim (int) - dimension of filtering. d=2 is for a vertical filter (called
@@ -391,11 +384,7 @@ def afb1d(x, h0, h1, use_amp, mode='zero', dim=-1):
         x = roll(x, -L2, dim=d)
         pad = (L - 1, 0) if d == 2 else (0, L - 1)
         if use_amp:
-<<<<<<< HEAD
-            with torch.npu.amp.autocast():  # for mixed precision
-=======
             with torch.cuda.amp.autocast():  # for mixed precision
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
         else:
             lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
@@ -420,11 +409,7 @@ def afb1d(x, h0, h1, use_amp, mode='zero', dim=-1):
             pad = (p // 2, 0) if d == 2 else (0, p // 2)
             # Calculate the high and lowpass
             if use_amp:
-<<<<<<< HEAD
-                with torch.npu.amp.autocast():
-=======
                 with torch.cuda.amp.autocast():
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                     lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
             else:
                 lohi = F.conv2d(x, h, padding=pad, stride=s, groups=C)
@@ -432,11 +417,7 @@ def afb1d(x, h0, h1, use_amp, mode='zero', dim=-1):
             pad = (0, 0, p // 2, (p + 1) // 2) if d == 2 else (p // 2, (p + 1) // 2, 0, 0)
             x = mypad(x, pad=pad, mode=mode)
             if use_amp:
-<<<<<<< HEAD
-                with torch.npu.amp.autocast():
-=======
                 with torch.cuda.amp.autocast():
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                     lohi = F.conv2d(x, h, stride=s, groups=C)
             else:
                 lohi = F.conv2d(x, h, stride=s, groups=C)
@@ -450,11 +431,11 @@ def afb1d_atrous(x, h0, h1, mode='periodic', dim=-1, dilation=1):
     """ 1D analysis filter bank (along one dimension only) of an image without
     downsampling. Does the a trous algorithm.
 
-    Inputs:
-        x (tensor): 4D input with the last two dimensions the spatial input
-        h0 (tensor): 4D input for the lowpass filter. Should have shape (1, 1,
+    Icudats:
+        x (tensor): 4D icudat with the last two dimensions the spatial icudat
+        h0 (tensor): 4D icudat for the lowpass filter. Should have shape (1, 1,
             h, 1) or (1, 1, 1, w)
-        h1 (tensor): 4D input for the highpass filter. Should have shape (1, 1,
+        h1 (tensor): 4D icudat for the highpass filter. Should have shape (1, 1,
             h, 1) or (1, 1, 1, w)
         mode (str): padding method
         dim (int) - dimension of filtering. d=2 is for a vertical filter (called
@@ -525,11 +506,7 @@ def sfb1d(lo, hi, g0, g1, use_amp, mode='zero', dim=-1):
     g1 = torch.cat([g1] * C, dim=0)
     if mode == 'per' or mode == 'periodization':
         if use_amp:
-<<<<<<< HEAD
-            with torch.npu.amp.autocast():
-=======
             with torch.cuda.amp.autocast():
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                 y = F.conv_transpose2d(lo, g0, stride=s, groups=C) + \
                     F.conv_transpose2d(hi, g1, stride=s, groups=C)
         else:
@@ -547,11 +524,7 @@ def sfb1d(lo, hi, g0, g1, use_amp, mode='zero', dim=-1):
                 mode == 'periodic':
             pad = (L - 2, 0) if d == 2 else (0, L - 2)
             if use_amp:
-<<<<<<< HEAD
-                with torch.npu.amp.autocast():
-=======
                 with torch.cuda.amp.autocast():
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
                     y = F.conv_transpose2d(lo, g0, stride=s, padding=pad, groups=C) + \
                         F.conv_transpose2d(hi, g1, stride=s, padding=pad, groups=C)
             else:
@@ -602,16 +575,16 @@ def int_to_mode(mode):
 
 
 class AFB2D(Function):
-    """ Does a single level 2d wavelet decomposition of an input. Does separate
+    """ Does a single level 2d wavelet decomposition of an icudat. Does separate
     row and column filtering by two calls to
     :py:func:`pytorch_wavelets.dwt.lowlevel.afb1d`
 
     Needs to have the tensors in the right form. Because this function defines
-    its own backward pass, saves on memory by not having to save the input
+    its own backward pass, saves on memory by not having to save the icudat
     tensors.
 
-    Inputs:
-        x (torch.Tensor): Input to decompose
+    Icudats:
+        x (torch.Tensor): Icudat to decompose
         h0_row: row lowpass
         h1_row: row highpass
         h0_col: col lowpass
@@ -642,7 +615,7 @@ class AFB2D(Function):
     @staticmethod
     def backward(ctx, low, highs):
         dx = None
-        if ctx.needs_input_grad[0]:
+        if ctx.needs_icudat_grad[0]:
             mode = ctx.mode
             h0_row, h1_row, h0_col, h1_col = ctx.saved_tensors
             lh, hl, hh = torch.unbind(highs, dim=2)
@@ -659,14 +632,14 @@ class AFB2D(Function):
 
 
 class AFB1D(Function):
-    """ Does a single level 1d wavelet decomposition of an input.
+    """ Does a single level 1d wavelet decomposition of an icudat.
 
     Needs to have the tensors in the right form. Because this function defines
-    its own backward pass, saves on memory by not having to save the input
+    its own backward pass, saves on memory by not having to save the icudat
     tensors.
 
-    Inputs:
-        x (torch.Tensor): Input to decompose
+    Icudats:
+        x (torch.Tensor): Icudat to decompose
         h0: lowpass
         h1: highpass
         mode (int): use mode_to_int to get the int code here
@@ -683,7 +656,7 @@ class AFB1D(Function):
     def forward(ctx, x, h0, h1, mode, use_amp):
         mode = int_to_mode(mode)
 
-        # Make inputs 4d
+        # Make icudats 4d
         x = x[:, :, None, :]
         h0 = h0[:, :, None, :]
         h1 = h1[:, :, None, :]
@@ -702,7 +675,7 @@ class AFB1D(Function):
     @staticmethod
     def backward(ctx, dx0, dx1):
         dx = None
-        if ctx.needs_input_grad[0]:
+        if ctx.needs_icudat_grad[0]:
             mode = ctx.mode
             h0, h1 = ctx.saved_tensors
             use_amp = ctx.use_amp
@@ -713,7 +686,7 @@ class AFB1D(Function):
 
             dx = sfb1d(dx0, dx1, h0, h1, use_amp, mode=mode, dim=3)[:, :, 0]
 
-            # Check for odd input
+            # Check for odd icudat
             if dx.shape[2] > ctx.shape:
                 dx = dx[:, :, :ctx.shape]
 
@@ -721,12 +694,12 @@ class AFB1D(Function):
 
 
 def afb2d(x, filts, mode='zero'):
-    """ Does a single level 2d wavelet decomposition of an input. Does separate
+    """ Does a single level 2d wavelet decomposition of an icudat. Does separate
     row and column filtering by two calls to
     :py:func:`pytorch_wavelets.dwt.lowlevel.afb1d`
 
-    Inputs:
-        x (torch.Tensor): Input to decompose
+    Icudats:
+        x (torch.Tensor): Icudat to decompose
         filts (list of ndarray or torch.Tensor): If a list of tensors has been
             given, this function assumes they are in the right form (the form
             returned by
@@ -736,7 +709,7 @@ def afb2d(x, filts, mode='zero'):
             :py:func:`~pytorch_wavelets.dwt.lowlevel.prep_filt_afb2d`.
         mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. Which
             padding to use. If periodization, the output size will be half the
-            input size.  Otherwise, the output size will be slightly larger than
+            icudat size.  Otherwise, the output size will be slightly larger than
             half.
 
     Returns:
@@ -760,7 +733,7 @@ def afb2d(x, filts, mode='zero'):
         else:
             h0_col, h1_col, h0_row, h1_row = filts
     else:
-        raise ValueError("Unknown form for input filts")
+        raise ValueError("Unknown form for icudat filts")
 
     lohi = afb1d(x, h0_row, h1_row, mode=mode, dim=3)
     y = afb1d(lohi, h0_col, h1_col, mode=mode, dim=2)
@@ -769,12 +742,12 @@ def afb2d(x, filts, mode='zero'):
 
 
 def afb2d_atrous(x, filts, mode='periodization', dilation=1):
-    """ Does a single level 2d wavelet decomposition of an input. Does separate
+    """ Does a single level 2d wavelet decomposition of an icudat. Does separate
     row and column filtering by two calls to
     :py:func:`pytorch_wavelets.dwt.lowlevel.afb1d`
 
-    Inputs:
-        x (torch.Tensor): Input to decompose
+    Icudats:
+        x (torch.Tensor): Icudat to decompose
         filts (list of ndarray or torch.Tensor): If a list of tensors has been
             given, this function assumes they are in the right form (the form
             returned by
@@ -784,7 +757,7 @@ def afb2d_atrous(x, filts, mode='periodization', dilation=1):
             :py:func:`~pytorch_wavelets.dwt.lowlevel.prep_filt_afb2d`.
         mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. Which
             padding to use. If periodization, the output size will be half the
-            input size.  Otherwise, the output size will be slightly larger than
+            icudat size.  Otherwise, the output size will be slightly larger than
             half.
         dilation (int): dilation factor for the filters. Should be 2**level
 
@@ -809,7 +782,7 @@ def afb2d_atrous(x, filts, mode='periodization', dilation=1):
         else:
             h0_col, h1_col, h0_row, h1_row = filts
     else:
-        raise ValueError("Unknown form for input filts")
+        raise ValueError("Unknown form for icudat filts")
 
     lohi = afb1d_atrous(x, h0_row, h1_row, mode=mode, dim=3, dilation=dilation)
     y = afb1d_atrous(lohi, h0_col, h1_col, mode=mode, dim=2, dilation=dilation)
@@ -818,18 +791,18 @@ def afb2d_atrous(x, filts, mode='periodization', dilation=1):
 
 
 def afb2d_nonsep(x, filts, mode='zero'):
-    """ Does a 1 level 2d wavelet decomposition of an input. Doesn't do separate
+    """ Does a 1 level 2d wavelet decomposition of an icudat. Doesn't do separate
     row and column filtering.
 
-    Inputs:
-        x (torch.Tensor): Input to decompose
+    Icudats:
+        x (torch.Tensor): Icudat to decompose
         filts (list or torch.Tensor): If a list is given, should be the low and
             highpass filter banks. If a tensor is given, it should be of the
             form created by
             :py:func:`pytorch_wavelets.dwt.lowlevel.prep_filt_afb2d_nonsep`
         mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. Which
             padding to use. If periodization, the output size will be half the
-            input size.  Otherwise, the output size will be slightly larger than
+            icudat size.  Otherwise, the output size will be slightly larger than
             half.
 
     Returns:
@@ -839,7 +812,7 @@ def afb2d_nonsep(x, filts, mode='zero'):
     Ny = x.shape[2]
     Nx = x.shape[3]
 
-    # Check the filter inputs
+    # Check the filter icudats
     if isinstance(filts, (tuple, list)):
         if len(filts) == 2:
             filts = prep_filt_afb2d_nonsep(filts[0], filts[1], device=x.device)
@@ -898,7 +871,7 @@ def sfb2d(ll, lh, hl, hh, filts, mode='zero'):
     Does separate row and column filtering by two calls to
     :py:func:`pytorch_wavelets.dwt.lowlevel.sfb1d`
 
-    Inputs:
+    Icudats:
         ll (torch.Tensor): lowpass coefficients
         lh (torch.Tensor): horizontal coefficients
         hl (torch.Tensor): vertical coefficients
@@ -912,7 +885,7 @@ def sfb2d(ll, lh, hl, hh, filts, mode='zero'):
             :py:func:`~pytorch_wavelets.dwt.lowlevel.prep_filt_sfb2d`.
         mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. Which
             padding to use. If periodization, the output size will be half the
-            input size.  Otherwise, the output size will be slightly larger than
+            icudat size.  Otherwise, the output size will be slightly larger than
             half.
     """
     tensorize = [not isinstance(x, torch.Tensor) for x in filts]
@@ -931,7 +904,7 @@ def sfb2d(ll, lh, hl, hh, filts, mode='zero'):
         else:
             g0_col, g1_col, g0_row, g1_row = filts
     else:
-        raise ValueError("Unknown form for input filts")
+        raise ValueError("Unknown form for icudat filts")
 
     lo = sfb1d(ll, lh, g0_col, g1_col, mode=mode, dim=2)
     hi = sfb1d(hl, hh, g0_col, g1_col, mode=mode, dim=2)
@@ -941,16 +914,16 @@ def sfb2d(ll, lh, hl, hh, filts, mode='zero'):
 
 
 class SFB2D(Function):
-    """ Does a single level 2d wavelet decomposition of an input. Does separate
+    """ Does a single level 2d wavelet decomposition of an icudat. Does separate
     row and column filtering by two calls to
     :py:func:`pytorch_wavelets.dwt.lowlevel.afb1d`
 
     Needs to have the tensors in the right form. Because this function defines
-    its own backward pass, saves on memory by not having to save the input
+    its own backward pass, saves on memory by not having to save the icudat
     tensors.
 
-    Inputs:
-        x (torch.Tensor): Input to decompose
+    Icudats:
+        x (torch.Tensor): Icudat to decompose
         h0_row: row lowpass
         h1_row: row highpass
         h0_col: col lowpass
@@ -979,7 +952,7 @@ class SFB2D(Function):
     @staticmethod
     def backward(ctx, dy):
         dlow, dhigh = None, None
-        if ctx.needs_input_grad[0]:
+        if ctx.needs_icudat_grad[0]:
             mode = ctx.mode
             g0_row, g1_row, g0_col, g1_col = ctx.saved_tensors
             dx = afb1d(dy, g0_row, g1_row, mode=mode, dim=3)
@@ -992,13 +965,13 @@ class SFB2D(Function):
 
 
 class SFB1D(Function):
-    """ Does a single level 1d wavelet decomposition of an input.
+    """ Does a single level 1d wavelet decomposition of an icudat.
 
     Needs to have the tensors in the right form. Because this function defines
-    its own backward pass, saves on memory by not having to save the input
+    its own backward pass, saves on memory by not having to save the icudat
     tensors.
 
-    Inputs:
+    Icudats:
         low (torch.Tensor): Lowpass to reconstruct of shape (N, C, L)
         high (torch.Tensor): Highpass to reconstruct of shape (N, C, L)
         g0: lowpass
@@ -1030,7 +1003,7 @@ class SFB1D(Function):
     @staticmethod
     def backward(ctx, dy):
         dlow, dhigh = None, None
-        if ctx.needs_input_grad[0]:
+        if ctx.needs_icudat_grad[0]:
             mode = ctx.mode
             use_amp = ctx.use_amp
             g0, g1, = ctx.saved_tensors
@@ -1047,7 +1020,7 @@ def sfb2d_nonsep(coeffs, filts, mode='zero'):
     """ Does a single level 2d wavelet reconstruction of wavelet coefficients.
     Does not do separable filtering.
 
-    Inputs:
+    Icudats:
         coeffs (torch.Tensor): tensor of coefficients of shape (N, C, 4, H, W)
             where the third dimension indexes across the (ll, lh, hl, hh) bands.
         filts (list of ndarray or torch.Tensor): If a list of tensors has been
@@ -1059,14 +1032,14 @@ def sfb2d_nonsep(coeffs, filts, mode='zero'):
             :py:func:`~pytorch_wavelets.dwt.lowlevel.prep_filt_sfb2d_nonsep`.
         mode (str): 'zero', 'symmetric', 'reflect' or 'periodization'. Which
             padding to use. If periodization, the output size will be half the
-            input size.  Otherwise, the output size will be slightly larger than
+            icudat size.  Otherwise, the output size will be slightly larger than
             half.
     """
     C = coeffs.shape[1]
     Ny = coeffs.shape[-2]
     Nx = coeffs.shape[-1]
 
-    # Check the filter inputs - should be in the form of a torch tensor, but if
+    # Check the filter icudats - should be in the form of a torch tensor, but if
     # not, tensorize it here.
     if isinstance(filts, (tuple, list)):
         if len(filts) == 2:
@@ -1076,7 +1049,7 @@ def sfb2d_nonsep(coeffs, filts, mode='zero'):
             filts = prep_filt_sfb2d_nonsep(
                 filts[0], filts[1], filts[2], filts[3], device=coeffs.device)
         else:
-            raise ValueError("Unkown form for input filts")
+            raise ValueError("Unkown form for icudat filts")
     f = torch.cat([filts] * C, dim=0)
     Ly = f.shape[2]
     Lx = f.shape[3]
@@ -1105,7 +1078,7 @@ def prep_filt_afb2d_nonsep(h0_col, h1_col, h0_row=None, h1_row=None,
     In particular, makes 2d point spread functions, and mirror images them in
     preparation to do torch.conv2d.
 
-    Inputs:
+    Icudats:
         h0_col (array-like): low pass column filter bank
         h1_col (array-like): high pass column filter bank
         h0_row (array-like): low pass row filter bank. If none, will assume the
@@ -1140,7 +1113,7 @@ def prep_filt_sfb2d_nonsep(g0_col, g1_col, g0_row=None, g1_row=None,
     In particular, makes 2d point spread functions. Does not mirror image them
     as sfb2d_nonsep uses conv2d_transpose which acts like normal convolution.
 
-    Inputs:
+    Icudats:
         g0_col (array-like): low pass column filter bank
         g1_col (array-like): high pass column filter bank
         g0_row (array-like): low pass row filter bank. If none, will assume the
@@ -1173,7 +1146,7 @@ def prep_filt_sfb2d(g0_col, g1_col, g0_row=None, g1_row=None, device=None):
     particular, makes the tensors the right shape. It does not mirror image them
     as as sfb2d uses conv2d_transpose which acts like normal convolution.
 
-    Inputs:
+    Icudats:
         g0_col (array-like): low pass column filter bank
         g1_col (array-like): high pass column filter bank
         g0_row (array-like): low pass row filter bank. If none, will assume the
@@ -1205,7 +1178,7 @@ def prep_filt_sfb1d(g0, g1, device=None):
     particular, makes the tensors the right shape. It does not mirror image them
     as as sfb2d uses conv2d_transpose which acts like normal convolution.
 
-    Inputs:
+    Icudats:
         g0 (array-like): low pass filter bank
         g1 (array-like): high pass filter bank
         device: which device to put the tensors on to
@@ -1228,7 +1201,7 @@ def prep_filt_afb2d(h0_col, h1_col, h0_row=None, h1_row=None, device=None):
     particular, makes the tensors the right shape. It takes mirror images of
     them as as afb2d uses conv2d which acts like normal correlation.
 
-    Inputs:
+    Icudats:
         h0_col (array-like): low pass column filter bank
         h1_col (array-like): high pass column filter bank
         h0_row (array-like): low pass row filter bank. If none, will assume the
@@ -1259,7 +1232,7 @@ def prep_filt_afb1d(h0, h1, device=None):
     particular, makes the tensors the right shape. It takes mirror images of
     them as as afb2d uses conv2d which acts like normal correlation.
 
-    Inputs:
+    Icudats:
         h0 (array-like): low pass column filter bank
         h1 (array-like): high pass column filter bank
         device: which device to put the tensors on to

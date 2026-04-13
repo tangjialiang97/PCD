@@ -33,7 +33,7 @@ class Model(nn.Module):
             nn.Linear(self.seg_len, self.d_model),
             nn.ReLU()
         )
-        self.rnn = nn.GRU(input_size=self.d_model, hidden_size=self.d_model, num_layers=1, bias=True,
+        self.rnn = nn.GRU(icudat_size=self.d_model, hidden_size=self.d_model, num_layers=1, bias=True,
                               batch_first=True, bidirectional=False)
         self.pos_emb = nn.Parameter(torch.randn(self.seg_num_y, self.d_model // 2))
         self.channel_emb = nn.Parameter(torch.randn(self.enc_in, self.d_model // 2))

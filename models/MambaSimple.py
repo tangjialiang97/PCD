@@ -80,7 +80,7 @@ class MambaBlock(nn.Module):
             groups = self.d_inner
         )
 
-        # takes in x and outputs the input-specific delta, B, C
+        # takes in x and outputs the icudat-specific delta, B, C
         self.x_proj = nn.Linear(self.d_inner, self.dt_rank + configs.d_ff * 2, bias=False)
 
         # projects delta

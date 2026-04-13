@@ -356,21 +356,21 @@ def run_augmentation_single(x, y, args):
 
 
     if len(x.shape)<3:
-        # Augmenting on the entire series: using the input data as "One Big Batch"
+        # Augmenting on the entire series: using the icudat data as "One Big Batch"
         #   Before  -   (sequence_length, num_channels)
         #   After   -   (1, sequence_length, num_channels)
         # Note: the 'sequence_length' here is actually the length of the entire series
-        x_input = x[np.newaxis,:]
+        x_icudat = x[np.newaxis,:]
     elif len(x.shape)==3:
         # Augmenting on the batch series: keep current dimension (batch_size, sequence_length, num_channels)
-        x_input = x
+        x_icudat = x
     else:
-        raise ValueError("Input must be (batch_size, sequence_length, num_channels) dimensional")
+        raise ValueError("Icudat must be (batch_size, sequence_length, num_channels) dimensional")
 
     if args.augmentation_ratio > 0:
         augmentation_tags = "%d"%args.augmentation_ratio
         for n in range(args.augmentation_ratio):
-            x_aug, augmentation_tags = augment(x_input, y, args)
+            x_aug, augmentation_tags = augment(x_icudat, y, args)
             # print("Round %d: %s done"%(n, augmentation_tags))
         if args.extra_tag:
             augmentation_tags += "_"+args.extra_tag

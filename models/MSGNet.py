@@ -86,11 +86,7 @@ class Model(nn.Module):
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len
         self.pred_len = configs.pred_len
-<<<<<<< HEAD
-        self.device = "npu" if torch.npu.is_available() else "cpu"
-=======
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
->>>>>>> 43bc95b0a4ddd08689931ee59d6b5b814a8c9ed1
 
         # for graph
         # self.num_nodes = configs.c_out

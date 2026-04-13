@@ -13,9 +13,9 @@ from layers.DWT_Decomposition import Decomposition
 
 
 class TokenMixer(nn.Module):
-    def __init__(self, input_seq=[], batch_size=[], channel=[], pred_seq=[], dropout=[], factor=[], d_model=[]):
+    def __init__(self, icudat_seq=[], batch_size=[], channel=[], pred_seq=[], dropout=[], factor=[], d_model=[]):
         super(TokenMixer, self).__init__()
-        self.input_seq = input_seq
+        self.icudat_seq = icudat_seq
         self.batch_size = batch_size
         self.channel = channel
         self.pred_seq = pred_seq
@@ -24,7 +24,7 @@ class TokenMixer(nn.Module):
         self.d_model = d_model
 
         self.dropoutLayer = nn.Dropout(self.dropout)
-        self.layers = nn.Sequential(nn.Linear(self.input_seq, self.pred_seq * self.factor),
+        self.layers = nn.Sequential(nn.Linear(self.icudat_seq, self.pred_seq * self.factor),
                                     nn.GELU(),
                                     nn.Dropout(self.dropout),
                                     nn.Linear(self.pred_seq * self.factor, self.pred_seq)
@@ -39,7 +39,7 @@ class TokenMixer(nn.Module):
 
 class Mixer(nn.Module):
     def __init__(self,
-                 input_seq=[],
+                 icudat_seq=[],
                  out_seq=[],
                  batch_size=[],
                  channel=[],
@@ -48,7 +48,7 @@ class Mixer(nn.Module):
                  tfactor=[],
                  dfactor=[]):
         super(Mixer, self).__init__()
-        self.input_seq = input_seq
+        self.icudat_seq = icudat_seq
         self.pred_seq = out_seq
         self.batch_size = batch_size
         self.channel = channel
@@ -57,7 +57,7 @@ class Mixer(nn.Module):
         self.tfactor = tfactor  # expansion factor for patch mixer
         self.dfactor = dfactor  # expansion factor for embedding mixer
 
-        self.tMixer = TokenMixer(input_seq=self.input_seq, batch_size=self.batch_size, channel=self.channel,
+        self.tMixer = TokenMixer(icudat_seq=self.icudat_seq, batch_size=self.batch_size, channel=self.channel,
                                  pred_seq=self.pred_seq, dropout=self.dropout, factor=self.tfactor,
                                  d_model=self.d_model)
         self.dropoutLayer = nn.Dropout(self.dropout)
@@ -73,7 +73,7 @@ class Mixer(nn.Module):
         '''
         Parameters
         ----------
-        x : input: [Batch, Channel, Patch_number, d_model]
+        x : icudat: [Batch, Channel, Patch_number, d_model]
 
         Returns
         -------
@@ -91,7 +91,7 @@ class Mixer(nn.Module):
 
 class ResolutionBranch(nn.Module):
     def __init__(self,
-                 input_seq=[],
+                 icudat_seq=[],
                  pred_seq=[],
                  batch_size=[],
                  channel=[],
@@ -103,7 +103,7 @@ class ResolutionBranch(nn.Module):
                  patch_len=[],
                  patch_stride=[]):
         super(ResolutionBranch, self).__init__()
-        self.input_seq = input_seq
+        self.icudat_seq = icudat_seq
         self.pred_seq = pred_seq
         self.batch_size = batch_size
         self.channel = channel
@@ -114,11 +114,11 @@ class ResolutionBranch(nn.Module):
         self.dfactor = dfactor
         self.patch_len = patch_len
         self.patch_stride = patch_stride
-        self.patch_num = int((self.input_seq - self.patch_len) / self.patch_stride + 2)
+        self.patch_num = int((self.icudat_seq - self.patch_len) / self.patch_stride + 2)
 
         self.patch_norm = nn.BatchNorm2d(self.channel)
         self.patch_embedding_layer = nn.Linear(self.patch_len, self.d_model)  # shared among all channels
-        self.mixer1 = Mixer(input_seq=self.patch_num,
+        self.mixer1 = Mixer(icudat_seq=self.patch_num,
                             out_seq=self.patch_num,
                             batch_size=self.batch_size,
                             channel=self.channel,
@@ -126,7 +126,7 @@ class ResolutionBranch(nn.Module):
                             dropout=self.dropout,
                             tfactor=self.tfactor,
                             dfactor=self.dfactor)
-        self.mixer2 = Mixer(input_seq=self.patch_num,
+        self.mixer2 = Mixer(icudat_seq=self.patch_num,
                             out_seq=self.patch_num,
                             batch_size=self.batch_size,
                             channel=self.channel,
@@ -143,7 +143,7 @@ class ResolutionBranch(nn.Module):
         '''
         Parameters
         ----------
-        x : input coefficient series: [Batch, channel, length_of_coefficient_series]
+        x : icudat coefficient series: [Batch, channel, length_of_coefficient_series]
 
         Returns
         -------
@@ -172,7 +172,7 @@ class ResolutionBranch(nn.Module):
 
 class WPMixerCore(nn.Module):
     def __init__(self,
-                 input_length=[],
+                 icudat_length=[],
                  pred_length=[],
                  wavelet_name=[],
                  level=[],
@@ -189,7 +189,7 @@ class WPMixerCore(nn.Module):
                  no_decomposition=[],
                  use_amp=[]):
         super(WPMixerCore, self).__init__()
-        self.input_length = input_length
+        self.icudat_length = icudat_length
         self.pred_length = pred_length
         self.wavelet_name = wavelet_name
         self.level = level
@@ -204,7 +204,7 @@ class WPMixerCore(nn.Module):
         self.dfactor = dfactor
         self.use_amp = use_amp
 
-        self.Decomposition_model = Decomposition(input_length=self.input_length,
+        self.Decomposition_model = Decomposition(icudat_length=self.icudat_length,
                                                  pred_length=self.pred_length,
                                                  wavelet_name=self.wavelet_name,
                                                  level=self.level,
@@ -217,14 +217,14 @@ class WPMixerCore(nn.Module):
                                                  no_decomposition=self.no_decomposition,
                                                  use_amp=self.use_amp)
 
-        self.input_w_dim = self.Decomposition_model.input_w_dim  # list of the length of the input coefficient series
+        self.icudat_w_dim = self.Decomposition_model.icudat_w_dim  # list of the length of the icudat coefficient series
         self.pred_w_dim = self.Decomposition_model.pred_w_dim  # list of the length of the predicted coefficient series
 
         self.patch_len = patch_len
         self.patch_stride = patch_stride
 
         # (m+1) number of resolutionBranch
-        self.resolutionBranch = nn.ModuleList([ResolutionBranch(input_seq=self.input_w_dim[i],
+        self.resolutionBranch = nn.ModuleList([ResolutionBranch(icudat_seq=self.icudat_w_dim[i],
                                                                 pred_seq=self.pred_w_dim[i],
                                                                 batch_size=self.batch_size,
                                                                 channel=self.channel,
@@ -235,7 +235,7 @@ class WPMixerCore(nn.Module):
                                                                 dfactor=self.dfactor,
                                                                 patch_len=self.patch_len,
                                                                 patch_stride=self.patch_stride) for i in
-                                               range(len(self.input_w_dim))])
+                                               range(len(self.icudat_w_dim))])
 
     def forward(self, xL):
         '''
@@ -274,7 +274,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.args = args
         self.task_name = args.task_name
-        self.wpmixerCore = WPMixerCore(input_length=self.args.seq_len,
+        self.wpmixerCore = WPMixerCore(icudat_length=self.args.seq_len,
                                        pred_length=self.args.pred_len,
                                        wavelet_name=wavelet,
                                        level=level,

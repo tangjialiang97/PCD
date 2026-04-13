@@ -42,7 +42,7 @@ class Model(nn.Module):
 
     # dimension extension
     def tokenEmb(self, x):
-        # x: [Batch, Input length, Channel]
+        # x: [Batch, Icudat length, Channel]
         x = x.permute(0, 2, 1)
         x = x.unsqueeze(3)
         # N*T*1 x 1*D = N*T*D
@@ -96,7 +96,7 @@ class Model(nn.Module):
         return y
 
     def forecast(self, x_enc):
-        # x: [Batch, Input length, Channel]
+        # x: [Batch, Icudat length, Channel]
         B, T, N = x_enc.shape
         # embedding x: [B, N, T, D]
         x = self.tokenEmb(x_enc)

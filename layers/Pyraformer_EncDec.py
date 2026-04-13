@@ -7,11 +7,11 @@ from layers.Embed import DataEmbedding
 import math
 
 
-def get_mask(input_size, window_size, inner_size):
+def get_mask(icudat_size, window_size, inner_size):
     """Get the attention mask of PAM-Naive"""
     # Get the size of all layers
     all_size = []
-    all_size.append(input_size)
+    all_size.append(icudat_size)
     for i in range(len(window_size)):
         layer_size = math.floor(all_size[i] / window_size[i])
         all_size.append(layer_size)
@@ -49,10 +49,10 @@ def get_mask(input_size, window_size, inner_size):
 
 def refer_points(all_sizes, window_size):
     """Gather features from PAM's pyramid sequences"""
-    input_size = all_sizes[0]
-    indexes = torch.zeros(input_size, len(all_sizes))
+    icudat_size = all_sizes[0]
+    indexes = torch.zeros(icudat_size, len(all_sizes))
 
-    for i in range(input_size):
+    for i in range(icudat_size):
         indexes[i][0] = i
         former_index = i
         for j in range(1, len(all_sizes)):
@@ -89,10 +89,10 @@ class EncoderLayer(nn.Module):
         self.pos_ffn = PositionwiseFeedForward(
             d_model, d_inner, dropout=dropout, normalize_before=normalize_before)
 
-    def forward(self, enc_input, slf_attn_mask=None):
+    def forward(self, enc_icudat, slf_attn_mask=None):
         attn_mask = RegularMask(slf_attn_mask)
         enc_output, _ = self.slf_attn(
-            enc_input, enc_input, enc_input, attn_mask=attn_mask)
+            enc_icudat, enc_icudat, enc_icudat, attn_mask=attn_mask)
         enc_output = self.pos_ffn(enc_output)
         return enc_output
 
@@ -173,19 +173,19 @@ class Bottleneck_Construct(nn.Module):
         self.down = Linear(d_model, d_inner)
         self.norm = nn.LayerNorm(d_model)
 
-    def forward(self, enc_input):
-        temp_input = self.down(enc_input).permute(0, 2, 1)
-        all_inputs = []
+    def forward(self, enc_icudat):
+        temp_icudat = self.down(enc_icudat).permute(0, 2, 1)
+        all_icudats = []
         for i in range(len(self.conv_layers)):
-            temp_input = self.conv_layers[i](temp_input)
-            all_inputs.append(temp_input)
+            temp_icudat = self.conv_layers[i](temp_icudat)
+            all_icudats.append(temp_icudat)
 
-        all_inputs = torch.cat(all_inputs, dim=2).transpose(1, 2)
-        all_inputs = self.up(all_inputs)
-        all_inputs = torch.cat([enc_input, all_inputs], dim=1)
+        all_icudats = torch.cat(all_icudats, dim=2).transpose(1, 2)
+        all_icudats = self.up(all_icudats)
+        all_icudats = torch.cat([enc_icudat, all_icudats], dim=1)
 
-        all_inputs = self.norm(all_inputs)
-        return all_inputs
+        all_icudats = self.norm(all_icudats)
+        return all_icudats
 
 
 class PositionwiseFeedForward(nn.Module):

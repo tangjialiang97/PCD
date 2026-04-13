@@ -115,13 +115,13 @@ class GrowthLayer(nn.Module):
 
         assert self.d_head * self.nhead == self.d_model, "d_model must be divisible by nhead"
 
-    def forward(self, inputs):
+    def forward(self, icudats):
         """
-        :param inputs: shape: (batch, seq_len, dim)
+        :param icudats: shape: (batch, seq_len, dim)
         :return: shape: (batch, seq_len, dim)
         """
-        b, t, d = inputs.shape
-        values = self.in_proj(inputs).view(b, t, self.nhead, -1)
+        b, t, d = icudats.shape
+        values = self.in_proj(icudats).view(b, t, self.nhead, -1)
         values = torch.cat([repeat(self.z0, 'h d -> b 1 h d', b=b), values], dim=1)
         values = values[:, 1:] - values[:, :-1]
         out = self.es(values)

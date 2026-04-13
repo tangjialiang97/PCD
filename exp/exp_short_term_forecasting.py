@@ -23,7 +23,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
     def _build_model(self):
         if self.args.data == 'm4':
             self.args.pred_len = M4Meta.horizons_map[self.args.seasonal_patterns]  # Up to M4 config
-            self.args.seq_len = 2 * self.args.pred_len  # input_len = 2*pred_len
+            self.args.seq_len = 2 * self.args.pred_len  # icudat_len = 2*pred_len
             self.args.label_len = self.args.pred_len
             self.args.frequency_map = M4Meta.frequency_map[self.args.seasonal_patterns]
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -81,7 +81,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
                 batch_y = batch_y.float().to(self.device)
                 batch_y_mark = batch_y_mark.float().to(self.device)
 
-                # decoder input
+                # decoder icudat
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
@@ -134,7 +134,7 @@ class Exp_Short_Term_Forecast(Exp_Basic):
 
         self.model.eval()
         with torch.no_grad():
-            # decoder input
+            # decoder icudat
             B, _, C = x.shape
             dec_inp = torch.zeros((B, self.args.pred_len, C)).float().to(self.device)
             dec_inp = torch.cat([x[:, -self.args.label_len:, :], dec_inp], dim=1).float()

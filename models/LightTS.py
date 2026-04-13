@@ -4,10 +4,10 @@ import torch.nn.functional as F
 
 
 class IEBlock(nn.Module):
-    def __init__(self, input_dim, hid_dim, output_dim, num_node):
+    def __init__(self, icudat_dim, hid_dim, output_dim, num_node):
         super(IEBlock, self).__init__()
 
-        self.input_dim = input_dim
+        self.icudat_dim = icudat_dim
         self.hid_dim = hid_dim
         self.output_dim = output_dim
         self.num_node = num_node
@@ -16,7 +16,7 @@ class IEBlock(nn.Module):
 
     def _build(self):
         self.spatial_proj = nn.Sequential(
-            nn.Linear(self.input_dim, self.hid_dim),
+            nn.Linear(self.icudat_dim, self.hid_dim),
             nn.LeakyReLU(),
             nn.Linear(self.hid_dim, self.hid_dim // 4)
         )
@@ -73,7 +73,7 @@ class Model(nn.Module):
 
     def _build(self):
         self.layer_1 = IEBlock(
-            input_dim=self.chunk_size,
+            icudat_dim=self.chunk_size,
             hid_dim=self.d_model // 4,
             output_dim=self.d_model // 4,
             num_node=self.num_chunks
@@ -82,7 +82,7 @@ class Model(nn.Module):
         self.chunk_proj_1 = nn.Linear(self.num_chunks, 1)
 
         self.layer_2 = IEBlock(
-            input_dim=self.chunk_size,
+            icudat_dim=self.chunk_size,
             hid_dim=self.d_model // 4,
             output_dim=self.d_model // 4,
             num_node=self.num_chunks
@@ -91,7 +91,7 @@ class Model(nn.Module):
         self.chunk_proj_2 = nn.Linear(self.num_chunks, 1)
 
         self.layer_3 = IEBlock(
-            input_dim=self.d_model // 2,
+            icudat_dim=self.d_model // 2,
             hid_dim=self.d_model // 2,
             output_dim=self.pred_len,
             num_node=self.enc_in

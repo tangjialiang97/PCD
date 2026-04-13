@@ -18,7 +18,7 @@ class Exp_Classification(Exp_Basic):
         super(Exp_Classification, self).__init__(args)
 
     def _build_model(self):
-        # model input depends on data
+        # model icudat depends on data
         train_data, train_loader = self._get_data(flag='TRAIN')
         test_data, test_loader = self._get_data(flag='TEST')
         self.args.seq_len = max(train_data.max_seq_len, test_data.max_seq_len)

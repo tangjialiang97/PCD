@@ -37,6 +37,32 @@ def print_args(args):
     print(f'  {"Moving Avg:":<20}{args.moving_avg:<20}{"Factor:":<20}{args.factor:<20}')
     print(f'  {"Distil:":<20}{args.distil:<20}{"Dropout:":<20}{args.dropout:<20}')
     print(f'  {"Embed:":<20}{args.embed:<20}{"Activation:":<20}{args.activation:<20}')
+    if hasattr(args, 'use_internal_physics'):
+        print(f'  {"Internal Phys:":<20}{args.use_internal_physics:<20}{"Phys Layers:":<20}{args.physics_layers:<20}')
+        print(f'  {"Phys Hidden:":<20}{args.physics_hidden_dim:<20}{"Night Cos Thr:":<20}{args.night_cos_threshold:<20}')
+        if hasattr(args, 'physics_gated_feedback'):
+            print(f'  {"Gated Feedback:":<20}{args.physics_gated_feedback:<20}{"Phys Kernel:":<20}{args.physics_kernel_size:<20}')
+        if hasattr(args, 'physics_use_weak_upper_bound'):
+            print(f'  {"Weak Upper:":<20}{args.physics_use_weak_upper_bound:<20}{"Alpha Min:":<20}{args.physics_upper_bound_alpha_min:<20}')
+            print(f'  {"Alpha Max:":<20}{args.physics_upper_bound_alpha_max:<20}')
+    if hasattr(args, 'is_three'):
+        print(f'  {"Is Three:":<20}{args.is_three:<20}')
+    if hasattr(args, 'wind_cap_quantile'):
+        if hasattr(args, 'wind_ramp_quantile'):
+            print(f'  {"Wind Cap Q:":<20}{args.wind_cap_quantile:<20}{"Wind Ramp Q:":<20}{args.wind_ramp_quantile:<20}')
+        else:
+            print(f'  {"Wind Cap Q:":<20}{args.wind_cap_quantile:<20}')
+    if hasattr(args, 'wind_state_bins'):
+        print(f'  {"Wind State Bins:":<20}{args.wind_state_bins:<20}')
+    if hasattr(args, 'wind_constraint_weight'):
+        print(f'  {"Wind Const W:":<20}{args.wind_constraint_weight:<20}{"Wind Warmup:":<20}{args.wind_constraint_warmup_epochs:<20}')
+    if hasattr(args, 'wind_cp_mode'):
+        print(f'  {"Wind Cp Mode:":<20}{args.wind_cp_mode:<20}{"Wind Cp Max:":<20}{args.wind_cp_max:<20}')
+        print(f'  {"Wind Cp Opt:":<20}{args.wind_cp_optimal_ratio:<20}{"Wind Cp Width:":<20}{args.wind_cp_width:<20}')
+    if hasattr(args, 'wind_soft_ramp_weight'):
+        print(f'  {"Wind Soft Ramp:":<20}{args.wind_soft_ramp_weight:<20}{"Wind Soft Bound:":<20}{args.wind_soft_bound_weight:<20}')
+    if hasattr(args, 'wind_grad_clip'):
+        print(f'  {"Wind Grad Clip:":<20}{args.wind_grad_clip:<20}')
     print()
 
     print("\033[1m" + "Run Parameters" + "\033[0m")

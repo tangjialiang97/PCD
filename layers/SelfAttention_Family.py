@@ -246,7 +246,7 @@ class ReformerLayer(nn.Module):
 class TwoStageAttentionLayer(nn.Module):
     '''
     The Two Stage Attention (TSA) Layer
-    input/output shape: [batch_size, Data_dim(D), Seg_num(L), d_model]
+    icudat/output shape: [batch_size, Data_dim(D), Seg_num(L), d_model]
     '''
 
     def __init__(self, configs,

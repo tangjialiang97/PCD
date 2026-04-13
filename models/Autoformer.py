@@ -92,7 +92,7 @@ class Model(nn.Module):
         zeros = torch.zeros([x_dec.shape[0], self.pred_len,
                              x_dec.shape[2]], device=x_enc.device)
         seasonal_init, trend_init = self.decomp(x_enc)
-        # decoder input
+        # decoder icudat
         trend_init = torch.cat(
             [trend_init[:, -self.label_len:, :], mean], dim=1)
         seasonal_init = torch.cat(
