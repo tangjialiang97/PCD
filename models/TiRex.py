@@ -4,6 +4,7 @@ from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import PatchEmbedding
 from tirex import load_model, ForecastModel
+from models._hf_local import resolve_hf_download_kwargs
 
 
 class Model(nn.Module):
@@ -15,10 +16,12 @@ class Model(nn.Module):
         super().__init__()
         self.tirex_device = self._resolve_tirex_device(configs)
         self.tirex_batch_size = self._resolve_tirex_batch_size(configs)
+        hf_kwargs = resolve_hf_download_kwargs("NX-AI/TiRex", "model.ckpt")
         self.model = load_model(
             "NX-AI/TiRex",
             device=self.tirex_device,
             compile=bool(getattr(configs, 'tirex_compile', False)),
+            hf_kwargs=hf_kwargs,
         )
         self.model.eval()
         self.task_name = configs.task_name

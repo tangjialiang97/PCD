@@ -1,17 +1,21 @@
 
 
 #!/usr/bin/env bash
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-3}"
+export TSL_HF_CACHE_DIR="${TSL_HF_CACHE_DIR:-/opt/data/private/huggingface_models}"
+export HF_HOME="${HF_HOME:-$TSL_HF_CACHE_DIR}"
+export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-$TSL_HF_CACHE_DIR/hub}"
+export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-$TSL_HF_CACHE_DIR/transformers}"
 set -uo pipefail
 
-debug_mode=False
 gpu_id=0
 log_file="scripts/solar/irr_grid_2_highcw.log"
 
 # Broad baseline sweep aligned with phy.sh
 models=(
-    TimesFMFT
-    TimeMoEFT
+    TiRexFT
+    ChronosFT
+    Chronos2FT
 )
 
 debug_mode=False

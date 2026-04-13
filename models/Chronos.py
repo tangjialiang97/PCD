@@ -4,6 +4,7 @@ from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import PatchEmbedding
 from chronos import BaseChronosPipeline
+from models._hf_local import resolve_hf_snapshot
 
 
 class Model(nn.Module):
@@ -13,8 +14,9 @@ class Model(nn.Module):
         stride: int, stride for patch_embedding
         """
         super().__init__()
+        model_path = resolve_hf_snapshot("amazon/chronos-bolt-base")
         self.model = BaseChronosPipeline.from_pretrained(
-            "amazon/chronos-bolt-base",
+            model_path,
             device_map="cuda",  # use "cpu" for CPU inference and "mps" for Apple Silicon
             torch_dtype=torch.bfloat16,
         )

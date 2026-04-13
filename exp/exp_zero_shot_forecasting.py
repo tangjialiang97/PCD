@@ -166,7 +166,7 @@ class Exp_Zero_Shot_Forecast(Exp_Basic):
         ymax = test_data.ymax
         mae, mse, nrmse, nmae = metric(preds, trues, ymax)
         print('mse:{}, mae:{}, nrmse:{}, nmae:{}, dtw:{}'.format(mse, mae, nrmse, nmae, dtw))
-        f = open("result_zero_shot_forecast_" + self.args.data + "_" + self.args.data_path.split(".")[0] + ".txt", 'a')
+        f = open("result_zero_shot_forecast_" + self.args.txt_name + "_" + self.args.data + "_" + self.args.data_path.split(".")[0] + ".txt", 'a')
 
         f.write(setting + "  \n")
         f.write('mse:{}, mae:{}, nrmse:{}, nmae:{}, dtw:{}'.format(mse, mae, nrmse, nmae, dtw))

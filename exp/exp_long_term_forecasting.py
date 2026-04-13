@@ -686,7 +686,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         ymax = test_data.ymax
         # ymax = 1.0
-        f = open("result_long_term_forecast_zs" + self.args.data + "_" + self.args.data_path.split(".")[0] + "_" + str(self.args.use_auxiliary) + ".txt", 'a')
+        f = open("result_long_term_forecast_" + self.args.txt_name + "_" + self.args.data + "_" + self.args.data_path.split(".")[0] + "_" + str(self.args.use_auxiliary) + ".txt", 'a')
         f.write(setting + "  \n")
 
         if is_three:
