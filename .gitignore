@@ -168,6 +168,8 @@ run_anylearn.py
 environment.txt
 *.pth
 *.pt
+*.ckpt
+*.safetensors
 *.txt
 *.pkl
 *.pickle
