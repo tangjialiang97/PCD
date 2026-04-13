@@ -187,7 +187,6 @@ environment.txt
 
 checkpoints/
 results/
-models/
 outputs/
 logs/
 runs/
