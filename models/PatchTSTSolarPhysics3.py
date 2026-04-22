@@ -6,6 +6,7 @@ from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.solar_physics_3 import SolarPhysicsStack
 from models.PatchTST import Transpose
+from models._solar_physics_utils import cache_solar_outputs
 
 
 class FlattenChannelHead(nn.Module):
@@ -136,7 +137,7 @@ class Model(nn.Module):
 
         cos_zenith = self._compute_cos_zenith(future_zenith)
         dec_out, _hidden = self.physics_stack(context, cos_zenith)
-        return dec_out
+        return cache_solar_outputs(self, base_out, dec_out, future_zenith)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None, future_zenith=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':

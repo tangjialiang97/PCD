@@ -1,6 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from types import SimpleNamespace
+
+
+def _cache_tensor(value):
+    if torch.is_tensor(value):
+        return value.detach()
+    return value
 
 
 class SolarPhysicsProjection(nn.Module):
@@ -56,7 +63,13 @@ class SolarPhysicsProjection(nn.Module):
             dni = dni * scale
             dhi = dhi * scale
 
-        return torch.stack([ghi, dni, dhi], dim=-1)
+        projected = torch.stack([ghi, dni, dhi], dim=-1)
+        self.latest_trace = SimpleNamespace(
+            raw_params=_cache_tensor(params),
+            projected=_cache_tensor(projected),
+            cos_zenith=_cache_tensor(cos_zenith),
+        )
+        return projected
 
 
 class SolarPhysicsBlock(nn.Module):
@@ -160,7 +173,17 @@ class SolarPhysicsStack(nn.Module):
     def forward(self, context, cos_zenith):
         hidden = self.input_norm(self.input_proj(context))
         state = self.initial_projection(hidden, cos_zenith)
+        initial_projected = state
         for block in self.blocks:
             hidden, state = block(hidden, state, cos_zenith)
         hidden = self.output_norm(hidden)
+        final_projection = self.blocks[-1].projection if len(self.blocks) > 0 else self.initial_projection
+        final_trace = getattr(final_projection, 'latest_trace', None)
+        raw_params = None if final_trace is None else getattr(final_trace, 'raw_params', None)
+        self.latest_trace = SimpleNamespace(
+            raw_params=_cache_tensor(raw_params),
+            initial_projected=_cache_tensor(initial_projected),
+            final_projected=_cache_tensor(state),
+            cos_zenith=_cache_tensor(cos_zenith),
+        )
         return state, hidden

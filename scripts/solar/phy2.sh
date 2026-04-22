@@ -1,41 +1,41 @@
 
 
 #!/usr/bin/env bash
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=1
 set -uo pipefail
 
 debug_mode=False
 gpu_id=0
-log_file="scripts/solar/irr_grid_3_highcw.log"
+log_file="scripts/solar/irr_grid_1_highcw.log"
 
 # Broad baseline sweep aligned with phy.sh
 models=(
+  iTransformerSolarPhysics
+  PatchTSTSolarPhysics
+  DLinearSolarPhysics
+  CrossformerSolarPhysics
+  AutoformerSolarPhysics
   InformerSolarPhysics
+  FEDformerSolarPhysics
   ETSformerSolarPhysics
   MICNSolarPhysics
-  MambaSimpleSolarPhysics
   LightTSSolarPhysics
-  ReformerSolarPhysics
-  PyraformerSolarPhysics
-  SCINetSolarPhysics
-  FiLMSolarPhysics
-  FreTSSolarPhysics
-  KoopaSolarPhysics
-  TiDESolarPhysics
+  PAttnSolarPhysics
+  TSMixerSolarPhysics
+  TimeFilterSolarPhysics  
 )
 
 if [ "$debug_mode" = "True" ]; then
   pred_lens=(12)
-  data_paths=("folsom.csv")
+  data_paths=("Congo_no_zero.csv")
 else
   pred_lens=(24 48 96 192)
-  data_paths=("45.36_-90.05_2015_2024_nonzero.csv" "34.05_-118.24_2015_2024_nonzero.csv" "31.1_-90.05_2015_2024_nonzero.csv" "Folsom_combined_no_zero.csv")
+  data_paths=("Germany.csv" "NewDelhi.csv")
 fi
-
 # Grid search space (log-scaled for stable loss balancing)
 closure_weights=(1.0)
 limit_weights=(1.0)
-var_weights=(1.0)
+var_weights=(0)
 var_gammas=(0.1)
 
 echo "===== Grid search started: $(date '+%F %T') =====" | tee -a "$log_file"
@@ -68,9 +68,9 @@ for var_gamma in "${var_gammas[@]}"; do
     --var_weight "$var_weight" \
     --var_gamma "$var_gamma" \
     --debug "$debug_mode" \
-    --root_path data \
+    --root_path data/solar \
     --data_path "$data_path" \
-    --model_id "irr_${model_name}_256_${pred_len}" \
+    --model_id "256_v2_${pred_len}" \
     --model "$model_name" \
     --data Solar \
     --features M \

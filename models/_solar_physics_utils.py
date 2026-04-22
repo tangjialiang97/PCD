@@ -4,6 +4,21 @@ from torch import nn
 from layers.solar_physics import SolarPhysicsStack
 
 
+def _cached_tensor(value):
+    if torch.is_tensor(value):
+        return value.detach()
+    return value
+
+
+def cache_solar_outputs(model, base_out, projected_out, future_zenith):
+    model.latest_base_out = _cached_tensor(base_out)
+    model.latest_projected_out = _cached_tensor(projected_out)
+    model.latest_cos_zenith = _cached_tensor(torch.cos(torch.deg2rad(future_zenith)).clamp(min=0.0))
+    physics_stack = getattr(model, 'physics_stack', None)
+    model.latest_projection_trace = getattr(physics_stack, 'latest_trace', None)
+    return projected_out
+
+
 class SolarPhysicsMixin:
     def _init_solar_physics(self, configs, model_name, default_hidden_dim):
         if configs.enc_in != 3:
@@ -26,10 +41,6 @@ class SolarPhysicsMixin:
             night_cos_threshold=self.night_cos_threshold,
             eps=self.physics_eps,
             use_gated_feedback=bool(getattr(configs, 'physics_gated_feedback', False)),
-            use_weak_upper_bound=bool(getattr(configs, 'physics_use_weak_upper_bound', False)),
-            solar_constant=float(getattr(configs, 'solar_constant', 1367.0)),
-            upper_bound_alpha_min=float(getattr(configs, 'physics_upper_bound_alpha_min', 0.8)),
-            upper_bound_alpha_max=float(getattr(configs, 'physics_upper_bound_alpha_max', 1.2)),
         )
 
     def _init_history_context(self, configs):
@@ -56,5 +67,9 @@ class SolarPhysicsMixin:
         if context.dim() == 2:
             context = context.reshape(base_out.shape[0], self.pred_len, self.physics_hidden_dim)
         context = context + self.base_state_embed(base_out)
-        dec_out, _hidden = self.physics_stack(context, self._compute_cos_zenith(future_zenith))
-        return dec_out
+        dec_out, _hidden = self.physics_stack(
+            context_seq=context,
+            base_state=base_out,
+            cos_zenith=self._compute_cos_zenith(future_zenith),
+        )
+        return cache_solar_outputs(self, base_out, dec_out, future_zenith)

@@ -1,6 +1,7 @@
 import argparse
 import hashlib
 import os
+import re
 import torch
 import torch.backends
 from exp.exp_long_term_forecasting_zero import Exp_Long_Term_Forecast
@@ -11,8 +12,77 @@ from exp.exp_classification import Exp_Classification
 from utils.print_args import print_args
 import random
 import numpy as np
+
+
 def str2bool(v):
     return str(v).lower() in ("1", "true", "t", "yes", "y")
+
+
+def sanitize_setting_token(value, default='unknown', max_len=48):
+    token = os.path.splitext(os.path.basename(str(value)))[0]
+    token = re.sub(r'[^0-9A-Za-z]+', '-', token).strip('-')
+    if not token:
+        token = default
+    return token[:max_len]
+
+
+def compress_dataset_tag(value, max_len=24):
+    token = sanitize_setting_token(value, default='data', max_len=64)
+    token = re.sub(r'-(?:19|20)\d{2}-(?:19|20)\d{2}(?=-|$)', '', token)
+
+    replacements = (
+        ('combined-no-zero', 'cnz'),
+        ('combined-nozero', 'cnz'),
+        ('nonzero', 'nz'),
+        ('trainval', 'trv'),
+        ('timestamp', 'ts'),
+        ('target', 'tgt'),
+    )
+    lowered = token.lower()
+    for old, new in replacements:
+        lowered = lowered.replace(old, new)
+
+    parts = [part for part in lowered.split('-') if part]
+    compact_parts = []
+    for part in parts:
+        if len(part) <= 4 or part.isdigit():
+            compact_parts.append(part)
+        elif re.fullmatch(r'[a-z]+', part):
+            compact_parts.append(part[:4])
+        else:
+            compact_parts.append(part[:6])
+
+    compact = '-'.join(compact_parts).strip('-')
+    if not compact:
+        compact = lowered[:max_len]
+    return compact[:max_len]
+
+
+def build_dataset_tag(args):
+    if getattr(args, 'data_path', ''):
+        return compress_dataset_tag(args.data_path)
+
+    trainval_tag = compress_dataset_tag(getattr(args, 'data_path_trainval', 'trainval.csv'))
+    test_tag = compress_dataset_tag(getattr(args, 'data_path_test', 'test.csv'))
+    if trainval_tag or test_tag:
+        return '{}-{}'.format(trainval_tag, test_tag)[:64]
+    return compress_dataset_tag(getattr(args, 'data', 'dataset'))
+
+
+def build_hidden_config_hash(parts, prefix='cfg', length=10):
+    payload = '|'.join(str(part) for part in parts)
+    digest = hashlib.md5(payload.encode('utf-8')).hexdigest()[:length]
+    return '{}{}'.format(prefix, digest)
+
+
+def task_name_for_setting(task_name):
+    aliases = {
+        'long_term_forecast': 'ltf',
+        'short_term_forecast': 'stf',
+    }
+    return aliases.get(task_name, task_name)
+
+
 if __name__ == '__main__':
     fix_seed = 2021
     random.seed(fix_seed)
@@ -160,12 +230,6 @@ if __name__ == '__main__':
     parser.add_argument('--physics_eps', type=float, default=1e-4, help='stability epsilon for internal physics projection')
     parser.add_argument('--physics_gated_feedback', action='store_true', default=False,
                         help='enable gated feedback for SolarPhysicsBlock temporal updates')
-    parser.add_argument('--physics_use_weak_upper_bound', action='store_true', default=False,
-                        help='enable a simplified cosz-based physical upper bound inside SolarPhysicsProjection')
-    parser.add_argument('--physics_upper_bound_alpha_min', type=float, default=0.8,
-                        help='lower bound of learnable alpha for the simplified physical upper bound')
-    parser.add_argument('--physics_upper_bound_alpha_max', type=float, default=1.2,
-                        help='upper bound of learnable alpha for the simplified physical upper bound')
 
     # GCN
     parser.add_argument('--node_dim', type=int, default=10, help='each node embbed to dim dimentions')
@@ -203,6 +267,8 @@ if __name__ == '__main__':
     if args.model.endswith('SolarPhysics'):
         args.use_internal_physics = True
 
+    args.dataset_tag = build_dataset_tag(args)
+
     print('Args in experiment:')
     print_args(args)
     if args.debug:
@@ -224,46 +290,35 @@ if __name__ == '__main__':
         Exp = Exp_Long_Term_Forecast
 
     def shorten_setting(raw_setting, ii):
-        max_setting_len = 220
-        if len(raw_setting) <= max_setting_len:
-            return raw_setting
-
-        prefix_parts = [
-            args.task_name,
-            args.model_id,
-            args.model,
-            args.data,
-            'pl{}'.format(args.pred_len),
-            args.des,
-            'i{}'.format(ii),
-        ]
-        prefix = '_'.join(str(part) for part in prefix_parts if str(part))
-        prefix = prefix[:120].rstrip('_')
-        digest = hashlib.md5(raw_setting.encode('utf-8')).hexdigest()[:10]
-        return '{}_h{}'.format(prefix, digest)
+        return raw_setting
 
     exp = Exp(args)  # set experiments
     ii = 0
-    raw_setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_expand{}_dc{}_fc{}_eb{}_dt{}_{}_{}'.format(
-        args.task_name,
-        args.model_id,
-        args.model,
-        args.data,
-        args.features,
-        args.seq_len,
-        args.label_len,
-        args.pred_len,
-        args.d_model,
-        args.n_heads,
-        args.e_layers,
-        args.d_layers,
-        args.d_ff,
-        args.expand,
-        args.d_conv,
-        args.factor,
-        args.embed,
-        args.distil,
-        args.des, ii)
+    setting_parts = [
+        task_name_for_setting(args.task_name),
+        sanitize_setting_token(args.model_id, default='mid', max_len=18),
+        sanitize_setting_token(args.model, default='model', max_len=24),
+        sanitize_setting_token(args.data, default='data', max_len=10),
+        'dp{}'.format(args.dataset_tag),
+        'sl{}'.format(args.seq_len),
+        'pl{}'.format(args.pred_len),
+    ]
+    if int(getattr(args, 'label_len', 0)) != 0:
+        setting_parts.append('ll{}'.format(args.label_len))
+    if str(getattr(args, 'features', 'M')) != 'M':
+        setting_parts.append('ft{}'.format(args.features))
+    if int(getattr(args, 'd_model', 128)) != 128:
+        setting_parts.append('dm{}'.format(args.d_model))
+    if int(getattr(args, 'e_layers', 2)) != 2:
+        setting_parts.append('el{}'.format(args.e_layers))
+    if int(getattr(args, 'd_layers', 1)) != 1:
+        setting_parts.append('dl{}'.format(args.d_layers))
+    if int(getattr(args, 'd_ff', 128)) != 128:
+        setting_parts.append('df{}'.format(args.d_ff))
+    des_token = sanitize_setting_token(args.des, default='exp', max_len=12)
+    if des_token and des_token != 'test':
+        setting_parts.append(des_token)
+    setting_parts.append('i{}'.format(ii))
     physics_parts = []
     if int(getattr(args, 'physics_kernel_size', 3)) != 3:
         physics_parts.append('pks{}'.format(args.physics_kernel_size))
@@ -271,16 +326,21 @@ if __name__ == '__main__':
         physics_parts.append('nct{}'.format(args.night_cos_threshold))
     if bool(getattr(args, 'physics_gated_feedback', False)):
         physics_parts.append('pgf1')
-    if bool(getattr(args, 'physics_use_weak_upper_bound', False)):
-        physics_parts.append('pub1')
-    if float(getattr(args, 'physics_upper_bound_alpha_min', 0.8)) != 0.8:
-        physics_parts.append('pual{}'.format(args.physics_upper_bound_alpha_min))
-    if float(getattr(args, 'physics_upper_bound_alpha_max', 1.2)) != 1.2:
-        physics_parts.append('puah{}'.format(args.physics_upper_bound_alpha_max))
     if getattr(args, 'extra_tag', ''):
         physics_parts.append('xt{}'.format(args.extra_tag))
-    if physics_parts:
-        raw_setting = raw_setting + '_' + '_'.join(physics_parts)
+    hidden_parts = [
+        'nh{}'.format(args.n_heads),
+        'expand{}'.format(args.expand),
+        'dc{}'.format(args.d_conv),
+        'fc{}'.format(args.factor),
+        'eb{}'.format(args.embed),
+        'dt{}'.format(args.distil),
+        'ip{}'.format(getattr(args, 'use_internal_physics', False)),
+        'phl{}'.format(getattr(args, 'physics_layers', 2)),
+        'phd{}'.format(getattr(args, 'physics_hidden_dim', 128)),
+    ]
+    hidden_tag = build_hidden_config_hash(hidden_parts)
+    raw_setting = '_'.join(str(part) for part in setting_parts + physics_parts + [hidden_tag] if str(part))
     setting = shorten_setting(raw_setting, ii)
 
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))

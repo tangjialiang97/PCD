@@ -55,7 +55,7 @@ for var_gamma in "${var_gammas[@]}"; do
     --debug "$debug_mode" \
     --root_path /opt/data/private/data/timedata/ \
     --data_path "$data_path" \
-    --model_id "irr_${model_name}_256_${pred_len}" \
+    --model_id "${model_name}_256_${pred_len}" \
     --model "$model_name" \
     --data Solar \
     --features M \

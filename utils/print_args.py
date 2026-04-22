@@ -40,11 +40,10 @@ def print_args(args):
     if hasattr(args, 'use_internal_physics'):
         print(f'  {"Internal Phys:":<20}{args.use_internal_physics:<20}{"Phys Layers:":<20}{args.physics_layers:<20}')
         print(f'  {"Phys Hidden:":<20}{args.physics_hidden_dim:<20}{"Night Cos Thr:":<20}{args.night_cos_threshold:<20}')
+        if hasattr(args, 'physics_context_mode'):
+            print(f'  {"Context Mode:":<20}{args.physics_context_mode:<20}{"Ctx Gate Init:":<20}{getattr(args, "physics_context_gate_init", "n/a"):<20}')
         if hasattr(args, 'physics_gated_feedback'):
             print(f'  {"Gated Feedback:":<20}{args.physics_gated_feedback:<20}{"Phys Kernel:":<20}{args.physics_kernel_size:<20}')
-        if hasattr(args, 'physics_use_weak_upper_bound'):
-            print(f'  {"Weak Upper:":<20}{args.physics_use_weak_upper_bound:<20}{"Alpha Min:":<20}{args.physics_upper_bound_alpha_min:<20}')
-            print(f'  {"Alpha Max:":<20}{args.physics_upper_bound_alpha_max:<20}')
     if hasattr(args, 'is_three'):
         print(f'  {"Is Three:":<20}{args.is_three:<20}')
     if hasattr(args, 'wind_cap_quantile'):

@@ -1,0 +1,94 @@
+{
+  "setting": "ltf_256-192_TimeFilter_Solar_dpfols-cnz_sl256_pl192_GeomTriplet-_i0_cfgec27882593",
+  "result_setting": "ltf_256-192_TimeFilter_Solar_dpfols-cnz_sl256_pl192_GeomTriplet-_i0_cfgec27882593",
+  "eval_split": "test",
+  "dataset": {
+    "eval_name": "",
+    "data": "Solar",
+    "dataset_tag": "fols-cnz",
+    "root_path": "/opt/data/private/code/TSLF/data/solar",
+    "data_path": "Folsom_combined_no_zero.csv",
+    "data_path_trainval": "trainval_timestamp_target.csv",
+    "data_path_test": "test_timestamp_target.csv"
+  },
+  "checkpoint_path": "/opt/data/private/code/Time-Series-Library-fm/checkpoints/ltf_256_192_TimeFilter_Solar_dpfols-cnz_ftM_sl256_ll0_pl192_dm128_nh8_el2_dl1_df128_expand2_dc4_fc3_ebtimeF_dtTrue_ExpGrid_0_False_cw1.0_lw1.0_sc1367.0_vg0.1_vw1.0_ipFalse_phl2_phd128_fth128_ftb32/checkpoint.pth",
+  "checkpoint": {
+    "checkpoint_path": "/opt/data/private/code/Time-Series-Library-fm/checkpoints/ltf_256_192_TimeFilter_Solar_dpfols-cnz_ftM_sl256_ll0_pl192_dm128_nh8_el2_dl1_df128_expand2_dc4_fc3_ebtimeF_dtTrue_ExpGrid_0_False_cw1.0_lw1.0_sc1367.0_vg0.1_vw1.0_ipFalse_phl2_phd128_fth128_ftb32/checkpoint.pth",
+    "strict_load": true,
+    "missing_keys": [],
+    "unexpected_keys": []
+  },
+  "pred_shape": [
+    120899,
+    192,
+    3
+  ],
+  "true_shape": [
+    120899,
+    192,
+    3
+  ],
+  "metrics": {
+    "mae": 116.34859466552734,
+    "mse": 29543.470703125,
+    "rmse": 171.88214189707145,
+    "mape": 23.51740264892578,
+    "mspe": 574301.1875,
+    "nrmse": 0.14317192137241364,
+    "nmae": 0.10522031784057617,
+    "rse": 0.5275372862815857,
+    "corr": 127.4478530883789
+  },
+  "per_channel_metrics": [
+    {
+      "name": "GHI",
+      "metrics": {
+        "mae": 144.89463806152344,
+        "mse": 35659.85546875,
+        "rmse": 188.83816528320312,
+        "mape": 4.1106486320495605,
+        "mspe": 56401.90625,
+        "nrmse": 0.12881185114383698,
+        "nmae": 0.09883672744035721,
+        "rse": 0.6802789568901062,
+        "corr": 208.59169006347656
+      }
+    },
+    {
+      "name": "DNI",
+      "metrics": {
+        "mae": 176.9029541015625,
+        "mse": 52959.34765625,
+        "rmse": 230.1289825439453,
+        "mape": 63.755062103271484,
+        "mspe": 1644841.125,
+        "nrmse": 0.22921213507652283,
+        "nmae": 0.17619815468788147,
+        "rse": 0.9268867373466492,
+        "corr": 126.8831558227539
+      }
+    },
+    {
+      "name": "DHI",
+      "metrics": {
+        "mae": 36.36981964111328,
+        "mse": 3679.556884765625,
+        "rmse": 60.65935134887695,
+        "mape": 2.686569929122925,
+        "mspe": 21660.576171875,
+        "nrmse": 0.08108454942703247,
+        "nmae": 0.048616256564855576,
+        "rse": 1.001047968864441,
+        "corr": 46.868709564208984
+      }
+    }
+  ],
+  "reservoir_metrics": null,
+  "solar_analysis": {
+    "overall_physics_path": "/opt/data/private/code/TSLF/results_geometry_triplet/timefilter_folsom_pl192/baseline/ltf_256-192_TimeFilter_Solar_dpfols-cnz_sl256_pl192_GeomTriplet-_i0_cfgec27882593/analysis/overall_physics.json",
+    "projection_compare_path": "/opt/data/private/code/TSLF/results_geometry_triplet/timefilter_folsom_pl192/baseline/ltf_256-192_TimeFilter_Solar_dpfols-cnz_sl256_pl192_GeomTriplet-_i0_cfgec27882593/analysis/projection_compare.json",
+    "post_closure_violation_mae": 90.81654357910156,
+    "post_feasible_rate": 0.04305061283936729,
+    "geometry_payload_path": "/opt/data/private/code/TSLF/results_geometry_triplet/timefilter_folsom_pl192/baseline/ltf_256-192_TimeFilter_Solar_dpfols-cnz_sl256_pl192_GeomTriplet-_i0_cfgec27882593/analysis/solar_geometry_payload.npz"
+  }
+}

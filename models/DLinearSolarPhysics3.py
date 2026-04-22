@@ -3,6 +3,7 @@ from torch import nn
 
 from layers.solar_physics_3 import SolarPhysicsStack
 from models.DLinear import Model as DLinearBackbone
+from models._solar_physics_utils import cache_solar_outputs
 
 
 class Model(DLinearBackbone):
@@ -43,7 +44,7 @@ class Model(DLinearBackbone):
         context = context + self.base_state_embed(base_out)
         cos_zenith = self._compute_cos_zenith(future_zenith)
         dec_out, _hidden = self.physics_stack(context, cos_zenith)
-        return dec_out
+        return cache_solar_outputs(self, base_out, dec_out, future_zenith)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None, future_zenith=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':

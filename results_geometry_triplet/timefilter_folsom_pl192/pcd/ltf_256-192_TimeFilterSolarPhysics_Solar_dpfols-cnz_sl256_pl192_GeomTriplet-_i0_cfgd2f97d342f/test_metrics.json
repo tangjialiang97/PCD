@@ -1,0 +1,87 @@
+{
+  "setting": "ltf_256-192_TimeFilterSolarPhysics_Solar_dpfols-cnz_sl256_pl192_GeomTriplet-_i0_cfgd2f97d342f",
+  "result_setting": "ltf_256-192_TimeFilterSolarPhysics_Solar_dpfols-cnz_sl256_pl192_GeomTriplet-_i0_cfgd2f97d342f",
+  "eval_split": "test",
+  "dataset": {
+    "eval_name": "",
+    "data": "Solar",
+    "dataset_tag": "fols-cnz",
+    "root_path": "/opt/data/private/code/TSLF/data/solar",
+    "data_path": "Folsom_combined_no_zero.csv",
+    "data_path_trainval": "trainval_timestamp_target.csv",
+    "data_path_test": "test_timestamp_target.csv"
+  },
+  "checkpoint_path": "/opt/data/private/code/TSLF/checkpoints/ltf_256-v2-192_TimeFilterSolarPhysics_Solar_dpfols-comb_sl256_pl192_ExpGrid_i0_cfg98acf12614/checkpoint.pth",
+  "checkpoint": {
+    "checkpoint_path": "/opt/data/private/code/TSLF/checkpoints/ltf_256-v2-192_TimeFilterSolarPhysics_Solar_dpfols-comb_sl256_pl192_ExpGrid_i0_cfg98acf12614/checkpoint.pth",
+    "strict_load": true,
+    "missing_keys": [],
+    "unexpected_keys": []
+  },
+  "pred_shape": [
+    120899,
+    192,
+    3
+  ],
+  "true_shape": [
+    120899,
+    192,
+    3
+  ],
+  "metrics": {
+    "mae": 86.4617691040039,
+    "mse": 18539.318359375,
+    "rmse": 136.1591655356884,
+    "mape": 13.986764907836914,
+    "mspe": 266172.25,
+    "nrmse": 0.11759347468614578,
+    "nmae": 0.08832209557294846,
+    "rse": 0.4154685139656067,
+    "corr": 172.3315887451172
+  },
+  "per_channel_metrics": [
+    {
+      "name": "GHI",
+      "metrics": {
+        "mae": 39.29386901855469,
+        "mse": 3761.033203125,
+        "rmse": 61.32726287841797,
+        "mape": 0.2950603663921356,
+        "mspe": 13.552689552307129,
+        "nrmse": 0.0418330579996109,
+        "nmae": 0.026803458109498024,
+        "rse": 0.22092802822589874,
+        "corr": 254.8779296875
+      }
+    },
+    {
+      "name": "DNI",
+      "metrics": {
+        "mae": 168.96229553222656,
+        "mse": 47981.21875,
+        "rmse": 219.04615783691406,
+        "mape": 40.712181091308594,
+        "mspe": 798407.8125,
+        "nrmse": 0.21817345917224884,
+        "nmae": 0.16828913986682892,
+        "rse": 0.88224858045578,
+        "corr": 169.15457153320312
+      }
+    },
+    {
+      "name": "DHI",
+      "metrics": {
+        "mae": 56.974449157714844,
+        "mse": 5506.49462890625,
+        "rmse": 74.20575714111328,
+        "mape": 0.9530763030052185,
+        "mspe": 95.44068908691406,
+        "nrmse": 0.0991922989487648,
+        "nmae": 0.07615887373685837,
+        "rse": 1.2246013879776,
+        "corr": 92.9622802734375
+      }
+    }
+  ],
+  "reservoir_metrics": null
+}

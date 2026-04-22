@@ -1,7 +1,7 @@
 
 
 #!/usr/bin/env bash
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-2}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1}"
 export TSL_HF_CACHE_DIR="${TSL_HF_CACHE_DIR:-/opt/data/private/huggingface_models}"
 export HF_HOME="${HF_HOME:-$TSL_HF_CACHE_DIR}"
 export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-$TSL_HF_CACHE_DIR/hub}"
@@ -21,10 +21,11 @@ models=(
 debug_mode=False
 if [ "$debug_mode" = "True" ]; then
   pred_lens=(24)
-  data_paths=("45.36_-90.05_2015_2024_nonzero.csv")
+  data_paths=("Congo.csv")
 else
   pred_lens=(24 48 96 192)
-  data_paths=("45.36_-90.05_2015_2024_nonzero.csv" "34.05_-118.24_2015_2024_nonzero.csv" "31.1_-90.05_2015_2024_nonzero.csv" "Folsom_combined_no_zero.csv")
+    data_paths=("Congo.csv" "NewDelhi.csv")
+
 fi
 
 # Grid search space (log-scaled for stable loss balancing)
@@ -59,7 +60,7 @@ for var_gamma in "${var_gammas[@]}"; do
     --task_name long_term_forecast \
     --is_training 1 \
     --debug "$debug_mode" \
-    --root_path data \
+    --root_path data/solar \
     --data_path "$data_path" \
     --model_id "zs_${model_name}_256_${pred_len}" \
     --model "$model_name" \

@@ -472,7 +472,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     conservation_weight = float(getattr(self.args, 'conservation_weight', 1.0))
                     loss = loss + res_warmup_factor * conservation_weight * l_conservation
 
-                if self.args.use_auxiliary and self.args.data == 'Solar':
+                if self.args.data == 'Solar' and (
+                    self.args.use_auxiliary or self.args._uses_external_physics
+                ):
                     # Warm up the whole auxiliary objective together to avoid
                     # early-stage optimization instability from strong constraints.
                     aux_warmup_epochs = int(getattr(self.args, 'closure_warmup_epochs', 2))
@@ -487,7 +489,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     ghi_hat = outputs[:, :, 0]
                     dni_hat = outputs[:, :, 1]
                     dhi_hat = outputs[:, :, 2]
-                    if not self._uses_solar_internal_physics():
+                    if self.args.use_auxiliary and not self._uses_solar_internal_physics():
                         residual = ghi_hat - (dni_hat * cos_zenith + dhi_hat)
                         # Apply closure only in daytime with usable solar elevation,
                         # then use a relative robust penalty so closure acts as a weak regularizer.
@@ -509,53 +511,98 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         closure_weight = float(getattr(self.args, 'closure_weight', 1.0))
                         aux_loss = aux_loss + closure_weight * l_closure
 
-                    # Meteorological attenuation limit:
-                    # GHI_upper = I0 * cos(theta_z) * f(P, RH, T)
-                    # L_limit = mean(ReLU(GHI_hat - GHI_upper)^2)
-                    i0 = float(getattr(self.args, 'solar_constant', 1367.0))
-                    has_relhum = bool(getattr(self.args, 'has_relhum', False))
-                    # Column order with relhum (e.g. Folsom):
-                    #   [ghi, dni, dhi, air_temp, relhum(4), press(5), windsp(6), winddir, max_windsp, zenith]
-                    # Column order without relhum (e.g. NSRDB-only sites):
-                    #   [ghi, dni, dhi, air_temp, press(4), windsp(5), winddir, max_windsp, zenith]
-                    air_temp = batch_y_aux[:, :, 3]
-                    if has_relhum:
-                        relhum = batch_y_aux[:, :, 4]
-                        press = batch_y_aux[:, :, 5]
-                        windsp_col = 6
-                    else:
-                        relhum = None
-                        press = batch_y_aux[:, :, 4]
-                        windsp_col = 5
+                    if self.args._uses_external_physics:
+                        # Meteorological attenuation limit:
+                        # GHI_upper = I0 * cos(theta_z) * f(P, RH, T)
+                        # L_limit = mean(ReLU(GHI_hat - GHI_upper)^2)
+                        i0 = float(getattr(self.args, 'solar_constant', 1367.0))
+                        has_relhum = bool(getattr(self.args, 'has_relhum', False))
+                        # Column order with relhum (e.g. Folsom):
+                        #   [ghi, dni, dhi, air_temp, relhum(4), press(5), windsp(6), winddir, max_windsp, zenith]
+                        # Column order without relhum (e.g. NSRDB-only sites):
+                        #   [ghi, dni, dhi, air_temp, press(4), windsp(5), winddir, max_windsp, zenith]
+                        air_temp = batch_y_aux[:, :, 3]
+                        if has_relhum:
+                            relhum = batch_y_aux[:, :, 4]
+                            press = batch_y_aux[:, :, 5]
+                            windsp_col = 6
+                        else:
+                            relhum = None
+                            press = batch_y_aux[:, :, 4]
+                            windsp_col = 5
 
-                    # Build a smooth attenuation factor in [0, 1].
-                    # When relhum is unavailable treat atmosphere as dry (relhum_norm=0),
-                    # giving a looser upper bound and avoiding spurious l_limit penalties.
-                    relhum_norm = (relhum / 100.0).clamp(0.0, 1.0) if relhum is not None else torch.zeros_like(air_temp)
-                    press_ratio = (press / 1013.25).clamp(0.6, 1.2)
-                    temp_penalty = ((air_temp - 25.0).abs() / 40.0).clamp(0.0, 1.0)
-                    f_attn = (press_ratio * (1.0 - 0.3 * relhum_norm) * (1.0 - 0.2 * temp_penalty)).clamp(0.0, 1.0)
+                        # Build a smooth attenuation factor in [0, 1].
+                        # When relhum is unavailable treat atmosphere as dry (relhum_norm=0),
+                        # giving a looser upper bound and avoiding spurious l_limit penalties.
+                        relhum_norm = (relhum / 100.0).clamp(0.0, 1.0) if relhum is not None else torch.zeros_like(air_temp)
+                        press_ratio = (press / 1013.25).clamp(0.6, 1.2)
+                        temp_penalty = ((air_temp - 25.0).abs() / 40.0).clamp(0.0, 1.0)
+                        f_attn = (press_ratio * (1.0 - 0.3 * relhum_norm) * (1.0 - 0.2 * temp_penalty)).clamp(0.0, 1.0)
 
-                    ghi_upper = i0 * cos_zenith * f_attn
-                    l_limit = torch.mean(torch.relu(ghi_hat - ghi_upper) ** 2)
-                    limit_weight = float(getattr(self.args, 'limit_weight', 1.0))
-                    aux_loss = aux_loss + limit_weight * l_limit
+                        ghi_upper = i0 * cos_zenith * f_attn
+                        l_limit = torch.mean(torch.relu(ghi_hat - ghi_upper) ** 2)
+                        limit_weight = float(getattr(self.args, 'limit_weight', 1.0))
+                        aux_loss = aux_loss + limit_weight * l_limit
 
-                    # Variability loss:
-                    # L_var = exp(-gamma * windsp) * ||dGHI/dt||^2
-                    # Low wind speed -> stronger smoothness; high wind speed -> weaker penalty.
-                    if outputs.shape[1] > 1:
-                        sample_interval = float(getattr(self.args, 'sample_interval', 1.0))
-                        delta_t = max(sample_interval, 1.0)
-                        dghi_dt = (ghi_hat[:, 1:] - ghi_hat[:, :-1]) / delta_t
-                        windsp = batch_y_aux[:, 1:, windsp_col].clamp(min=0.0)
-                        gamma_var = float(getattr(self.args, 'var_gamma', 0.1))
-                        var_weight_term = torch.exp(-gamma_var * windsp)
-                        l_var = torch.mean(var_weight_term * (dghi_dt ** 2))
-                        var_weight = float(getattr(self.args, 'var_weight', 1.0))
-                        aux_loss = aux_loss + var_weight * l_var
+                        # Variability loss:
+                        # L_var = exp(-gamma * windsp) * ||dGHI/dt||^2
+                        # Low wind speed -> stronger smoothness; high wind speed -> weaker penalty.
+                        if outputs.shape[1] > 1:
+                            sample_interval = float(getattr(self.args, 'sample_interval', 1.0))
+                            delta_t = max(sample_interval, 1.0)
+                            dghi_dt = (ghi_hat[:, 1:] - ghi_hat[:, :-1]) / delta_t
+                            windsp = batch_y_aux[:, 1:, windsp_col].clamp(min=0.0)
+                            gamma_var = float(getattr(self.args, 'var_gamma', 0.1))
+                            var_weight_term = torch.exp(-gamma_var * windsp)
+                            l_var = torch.mean(var_weight_term * (dghi_dt ** 2))
+                            var_weight = float(getattr(self.args, 'var_weight', 1.0))
+                            aux_loss = aux_loss + var_weight * l_var
 
                     loss = loss + aux_warmup_factor * aux_loss
+
+                if self.args.data == 'Solar' and self._uses_solar_internal_physics():
+                    dhi_weight = float(getattr(self.args, 'solar_dhi_weight', 0.0))
+                    dhi_ratio_floor_weight = float(getattr(self.args, 'solar_dhi_ratio_floor_weight', 0.0))
+                    if dhi_weight > 0.0 or dhi_ratio_floor_weight > 0.0:
+                        batch_y_aux = batch_y[:, -self.args.pred_len:, :].to(self.device)
+                        zenith_deg = batch_y_aux[:, :, -1]
+                        cos_zenith = torch.cos(torch.deg2rad(zenith_deg)).clamp(min=0.0)
+
+                        dhi_day_cos_threshold = float(getattr(self.args, 'solar_dhi_day_cos_threshold', 0.05))
+                        dhi_ref_floor = float(getattr(self.args, 'solar_dhi_ref_floor', 100.0))
+                        dhi_beta = float(getattr(self.args, 'solar_dhi_beta', 0.03))
+                        dhi_ratio_floor_cap = float(getattr(self.args, 'solar_dhi_ratio_floor_cap', 0.05))
+                        ratio_eps = float(getattr(self.args, 'physics_eps', 1e-4))
+
+                        day_mask = (cos_zenith > dhi_day_cos_threshold).float()
+                        day_count = day_mask.sum().clamp_min(1.0)
+
+                        ghi_hat = outputs[:, :, 0]
+                        dhi_hat = outputs[:, :, 2]
+                        ghi_true = batch_y_main_pred[:, :, 0].detach().clamp_min(ratio_eps)
+                        dhi_true = batch_y_main_pred[:, :, 2].detach().clamp_min(0.0)
+
+                        if dhi_weight > 0.0:
+                            dhi_ref = ghi_true.abs().clamp_min(dhi_ref_floor)
+                            dhi_loss = torch.nn.functional.smooth_l1_loss(
+                                dhi_hat / dhi_ref,
+                                dhi_true / dhi_ref,
+                                reduction='none',
+                                beta=dhi_beta,
+                            )
+                            loss = loss + dhi_weight * (dhi_loss * day_mask).sum() / day_count
+
+                        if dhi_ratio_floor_weight > 0.0:
+                            ratio_hat = (dhi_hat / ghi_hat.clamp_min(ratio_eps)).clamp(0.0, 1.0)
+                            ratio_true = (dhi_true / ghi_true.clamp_min(ratio_eps)).clamp(0.0, 1.0)
+                            ratio_floor = torch.minimum(
+                                ratio_true,
+                                torch.full_like(ratio_true, dhi_ratio_floor_cap),
+                            )
+                            ratio_shortfall = torch.relu(ratio_floor - ratio_hat)
+                            loss = loss + dhi_ratio_floor_weight * (
+                                (ratio_shortfall ** 2) * day_mask
+                            ).sum() / day_count
 
                 train_loss.append(loss.item())
 
@@ -686,7 +733,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
         ymax = test_data.ymax
         # ymax = 1.0
-        f = open("result_long_term_forecast_" + self.args.txt_name + "_" + self.args.data + "_" + self.args.data_path.split(".")[0] + "_" + str(self.args.use_auxiliary) + ".txt", 'a')
+        f = open("result_new_" + self.args.txt_name + "_" + self.args.data + "_" + self.args.data_path.split(".")[0] + "_" + str(self.args._uses_external_physics) + ".txt", 'a')
         f.write(setting + "  \n")
 
         if is_three:

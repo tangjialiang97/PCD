@@ -4,6 +4,7 @@ from einops import rearrange, repeat
 
 from layers.solar_physics import SolarPhysicsStack
 from models.Crossformer import Model as CrossformerBackbone
+from models._solar_physics_utils import cache_solar_outputs
 
 
 class Model(CrossformerBackbone):
@@ -28,10 +29,6 @@ class Model(CrossformerBackbone):
             night_cos_threshold=self.night_cos_threshold,
             eps=self.physics_eps,
             use_gated_feedback=bool(getattr(configs, 'physics_gated_feedback', False)),
-            use_weak_upper_bound=bool(getattr(configs, 'physics_use_weak_upper_bound', False)),
-            solar_constant=float(getattr(configs, 'solar_constant', 1367.0)),
-            upper_bound_alpha_min=float(getattr(configs, 'physics_upper_bound_alpha_min', 0.8)),
-            upper_bound_alpha_max=float(getattr(configs, 'physics_upper_bound_alpha_max', 1.2)),
         )
 
     def _compute_cos_zenith(self, future_zenith):
@@ -54,8 +51,12 @@ class Model(CrossformerBackbone):
         context = context.reshape(base_out.shape[0], self.pred_len, self.physics_hidden_dim)
         context = context + self.base_state_embed(base_out)
         cos_zenith = self._compute_cos_zenith(future_zenith)
-        dec_out, _hidden = self.physics_stack(context, cos_zenith)
-        return dec_out
+        dec_out, _hidden = self.physics_stack(
+            context_seq=context,
+            base_state=base_out,
+            cos_zenith=cos_zenith,
+        )
+        return cache_solar_outputs(self, base_out, dec_out, future_zenith)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None, future_zenith=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':

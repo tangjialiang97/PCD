@@ -13,9 +13,23 @@ warnings.filterwarnings('ignore')
 DATASET_LAT_LON = {
     'folsom.csv': (38.677, -121.15),
     'Folsom_combined_no_zero.csv': (38.677, -121.15),
+    'Folsom_combined.csv': (38.677, -121.15),
     '45.36_-90.05_2015_2024_nonzero.csv': (45.36, -90.05),
     '34.05_-118.24_2015_2024_nonzero.csv': (34.05, -118.24),
     '31.1_-90.05_2015_2024_nonzero.csv': (31.1, -90.05),
+    '45.36_-90.05_2015_2024.csv': (45.36, -90.05),
+    'Congo_no_zero.csv': (2.61924, 19.85019),
+    'Germany_no_zero.csv': (50.0, 10.0),
+    'NewDelhi_no_zero.csv': (28.0, 77.0),
+    'Congo.csv': (2.61924, 19.85019),
+    'Germany.csv': (50.0, 10.0),
+    'NewDelhi.csv': (28.0, 77.0),
+    '25.76_-80.19_2015_2024.csv': (25.76, -80.19),
+    '39.74_-104.99_2015_2024.csv': (39.74, -104.99),
+    '44.98_-93.27_2015_2024.csv': (44.98, -93.27),
+    '25.76_-80.19_2015_2024_no_zero.csv': (25.76, -80.19),
+    '39.74_-104.99_2015_2024_no_zero.csv': (39.74, -104.99),
+    '44.98_-93.27_2015_2024_no_zero.csv': (44.98, -93.27),
 }
 
 WIND_FEATURE_ORDER = [
@@ -584,13 +598,15 @@ class Dataset_Other(Dataset):
 
 if __name__ == "__main__":
     args = argparse.Namespace()
-    args.seq_len = 8
+    args.seq_len = 256
     args.label_len = 0
-    args.pred_len = 8
-    args.root_path = "/opt/data/private/data/datadbl/wind/kag/"
-    args.data_path = "Location1.csv"
-    args.target = "target"
+    args.pred_len = 24
+    args.root_path = "/opt/data/private/code/Time-Series-Library-fm/data/solar/"
+    args.data_path = "Germany.csv"
+    args.target = "ghi"
     args.timeenc = 0
+    args.slide_step = 8
+    args.sample_interval = 2
 
     # 例子：
     # sample_interval=8 -> 下采样为原来 8 倍间隔
@@ -604,8 +620,8 @@ if __name__ == "__main__":
         target=args.target,
         scale=True,
         timeenc=args.timeenc,
-        sample_interval=1,
-        slide_step=8,
+        sample_interval=args.sample_interval,
+        slide_step=args.slide_step,
     )
 
 
@@ -618,8 +634,8 @@ if __name__ == "__main__":
         target=args.target,
         scale=True,  # 需要已 fit 的 scaler，后续 inverse_transform 才可用
         timeenc=args.timeenc,
-        sample_interval=1,
-        slide_step=8,
+        sample_interval=args.sample_interval,
+        slide_step=args.slide_step,
     )
 
     dataset_train_unscaled = Dataset_Other(
@@ -631,8 +647,8 @@ if __name__ == "__main__":
         target=args.target,
         scale=False,
         timeenc=args.timeenc,
-        sample_interval=1,
-        slide_step=8,
+        sample_interval=args.sample_interval,
+        slide_step=args.slide_step,
     )
 
     dataset_test_unscaled = Dataset_Other(
@@ -644,25 +660,27 @@ if __name__ == "__main__":
         target=args.target,
         scale=False,
         timeenc=args.timeenc,
-        sample_interval=1,
-        slide_step=8,
+        sample_interval=args.sample_interval,
+        slide_step=args.slide_step,
     )
+    print(len(dataset_train_scaled))
+    print(len(dataset_test_scaled))
 
-    dataset_train_scaled_inverse = dataset_train_scaled.inverse_transform(dataset_train_scaled.data_x)
-    dataset_test_scaled_inverse = dataset_test_scaled.inverse_transform(dataset_test_scaled.data_x)
+    # dataset_train_scaled_inverse = dataset_train_scaled.inverse_transform(dataset_train_scaled.data_x)
+    # dataset_test_scaled_inverse = dataset_test_scaled.inverse_transform(dataset_test_scaled.data_x)
 
-    # 计算dataset_train_scaled和dataset_train_unscaled的均值和标准差
-    mean_scaled = dataset_test_scaled.data_x.mean()
-    std_scaled = dataset_test_scaled.data_x.std()
-    mean_unscaled = dataset_test_unscaled.data_x.mean()
-    std_unscaled = dataset_test_unscaled.data_x.std()
-    mean_unscaled_inverse = dataset_test_scaled_inverse.mean()
-    std_unscaled_inverse = dataset_test_scaled_inverse.std()
-    print(mean_scaled, std_scaled)
-    print(mean_unscaled, std_unscaled)
-    print(mean_unscaled_inverse, std_unscaled_inverse)
+    # # 计算dataset_train_scaled和dataset_train_unscaled的均值和标准差
+    # mean_scaled = dataset_test_scaled.data_x.mean()
+    # std_scaled = dataset_test_scaled.data_x.std()
+    # mean_unscaled = dataset_test_unscaled.data_x.mean()
+    # std_unscaled = dataset_test_unscaled.data_x.std()
+    # mean_unscaled_inverse = dataset_test_scaled_inverse.mean()
+    # std_unscaled_inverse = dataset_test_scaled_inverse.std()
+    # print(mean_scaled, std_scaled)
+    # print(mean_unscaled, std_unscaled)
+    # print(mean_unscaled_inverse, std_unscaled_inverse)
 
-    # 计算dataset_train_scaled，dataset_train_unscaled，dataset_test_scaled，dataset_test_unscaled mse
-    mse_scaled = np.mean((dataset_test_scaled.data_x - dataset_test_unscaled.data_x) ** 2)
-    mse_unscaled_inverse = np.mean((dataset_test_scaled_inverse - dataset_test_unscaled.data_x) ** 2)
-    print(mse_scaled, mse_unscaled_inverse)
+    # # 计算dataset_train_scaled，dataset_train_unscaled，dataset_test_scaled，dataset_test_unscaled mse
+    # mse_scaled = np.mean((dataset_test_scaled.data_x - dataset_test_unscaled.data_x) ** 2)
+    # mse_unscaled_inverse = np.mean((dataset_test_scaled_inverse - dataset_test_unscaled.data_x) ** 2)
+    # print(mse_scaled, mse_unscaled_inverse)
