@@ -30,8 +30,23 @@ class SolarPhysicsMixin:
         self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', default_hidden_dim))
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
+        self.physics_context_mode = str(getattr(configs, 'physics_context_mode', 'baseline')).lower()
+        valid_context_modes = {'baseline', 'base_only', 'gated'}
+        if self.physics_context_mode not in valid_context_modes:
+            raise ValueError(
+                'physics_context_mode must be one of {} for {}, got {!r}.'.format(
+                    sorted(valid_context_modes),
+                    model_name,
+                    self.physics_context_mode,
+                )
+            )
 
         self.base_state_embed = nn.Linear(3, self.physics_hidden_dim)
+        if self.physics_context_mode == 'gated':
+            gate_init = float(getattr(configs, 'physics_context_gate_init', 2.0))
+            self.physics_context_gate_logit = nn.Parameter(
+                torch.full((self.physics_hidden_dim,), gate_init)
+            )
         self.physics_stack = SolarPhysicsStack(
             input_dim=self.physics_hidden_dim,
             hidden_dim=self.physics_hidden_dim,
@@ -62,11 +77,28 @@ class SolarPhysicsMixin:
     def _compute_cos_zenith(self, future_zenith):
         return torch.cos(torch.deg2rad(future_zenith)).clamp(min=0.0)
 
+    def _build_physics_context(self, learned_context, base_out):
+        base_context = self.base_state_embed(base_out)
+        if self.physics_context_mode == 'base_only':
+            return base_context
+
+        if learned_context is None:
+            raise RuntimeError(
+                'learned_context is required for non-base_only physics_context_mode.'
+            )
+        if learned_context.dim() == 2:
+            learned_context = learned_context.reshape(
+                base_out.shape[0], self.pred_len, self.physics_hidden_dim
+            )
+        if self.physics_context_mode == 'baseline':
+            return learned_context + base_context
+
+        gate = torch.sigmoid(self.physics_context_gate_logit).view(1, 1, -1)
+        return base_context + gate * learned_context
+
     def _apply_physics(self, context, base_out, future_zenith):
         self._require_future_zenith(future_zenith)
-        if context.dim() == 2:
-            context = context.reshape(base_out.shape[0], self.pred_len, self.physics_hidden_dim)
-        context = context + self.base_state_embed(base_out)
+        context = self._build_physics_context(context, base_out)
         dec_out, _hidden = self.physics_stack(
             context_seq=context,
             base_state=base_out,

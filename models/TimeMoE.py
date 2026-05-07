@@ -21,7 +21,6 @@ class Model(nn.Module):
             trust_remote_code=True,
             local_files_only=True,
         )
-        self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
         self.use_cache = bool(getattr(configs, 'time_moe_use_cache', True))
@@ -76,7 +75,4 @@ class Model(nn.Module):
         return dec_out
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
-        if self.task_name == 'zero_shot_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
-            return dec_out
-        return None
+        return self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)

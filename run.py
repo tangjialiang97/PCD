@@ -5,11 +5,6 @@ import re
 import torch
 import torch.backends
 from exp.exp_long_term_forecasting import Exp_Long_Term_Forecast
-from exp.exp_zero_shot_forecasting import Exp_Zero_Shot_Forecast
-from exp.exp_imputation import Exp_Imputation
-from exp.exp_short_term_forecasting import Exp_Short_Term_Forecast
-from exp.exp_anomaly_detection import Exp_Anomaly_Detection
-from exp.exp_classification import Exp_Classification
 from utils.print_args import print_args
 import random
 import numpy as np
@@ -252,12 +247,6 @@ if __name__ == '__main__':
                         help='internal TiRex forecast batch size; 0 uses an automatic value based on outer batch size')
     parser.add_argument('--tirex_compile', type=str2bool, default=False,
                         help='enable torch.compile for TiRex when supported; may add startup overhead')
-    parser.add_argument('--ft_adapter_hidden_dim', type=int, default=128,
-                        help='hidden width of the residual bottleneck adapter used by FT wrappers')
-    parser.add_argument('--ft_adapter_bottleneck_dim', type=int, default=32,
-                        help='bottleneck width of the residual adapter used by FT wrappers')
-    parser.add_argument('--ft_adapter_dropout', type=float, default=0.1,
-                        help='dropout used inside the residual adapter used by FT wrappers')
     parser.add_argument('--is_three', action='store_true', default=False,
                         help='report GHI/DNI/DHI metrics and 3-channel average during test')
     parser.add_argument('--use_internal_physics', action='store_true', default=False,
@@ -390,8 +379,6 @@ if __name__ == '__main__':
             setting_parts.append(des_token)
         setting_parts.append('i{}'.format(ii))
         physics_parts = []
-        if float(getattr(args, 'ft_adapter_dropout', 0.1)) != 0.1:
-            physics_parts.append('ftd{}'.format(args.ft_adapter_dropout))
         if int(getattr(args, 'physics_kernel_size', 3)) != 3:
             physics_parts.append('pks{}'.format(args.physics_kernel_size))
         if float(getattr(args, 'night_cos_threshold', 0.0)) != 0.0:
@@ -459,8 +446,6 @@ if __name__ == '__main__':
             'ip{}'.format(args.use_internal_physics),
             'phl{}'.format(args.physics_layers),
             'phd{}'.format(args.physics_hidden_dim),
-            'fth{}'.format(args.ft_adapter_hidden_dim),
-            'ftb{}'.format(args.ft_adapter_bottleneck_dim),
         ]
         hidden_tag = build_hidden_config_hash(hidden_parts)
         raw_setting = '_'.join(str(part) for part in setting_parts + physics_parts + [hidden_tag] if str(part))

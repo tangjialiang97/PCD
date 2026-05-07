@@ -241,7 +241,7 @@ class Model(nn.Module):
             rearrange(x_i_p4, "b c l -> (b c) l").unsqueeze(-1).permute(0, 2, 1)
         ).permute(0, 2, 1)
 
-        # 对齐不同卷积得到的序列长度，裁剪到统一的 patch_num1 以便 concat
+
         patch_len_target = self.patch_num1
         encoding_patch1 = encoding_patch1[:, :patch_len_target, :]
         encoding_patch2 = encoding_patch2[:, :patch_len_target, :]

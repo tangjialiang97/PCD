@@ -1,39 +1,22 @@
 import torch
-from torch import nn
 from einops import rearrange
 
-from layers.solar_physics import SolarPhysicsStack
 from models.PAttn import Model as PAttnBackbone
-from models._solar_physics_utils import cache_solar_outputs
+from models._solar_physics_utils import SolarPhysicsMixin
 
 
-class Model(PAttnBackbone):
+class Model(PAttnBackbone, SolarPhysicsMixin):
     def __init__(self, configs, patch_len=16, stride=8):
         super(Model, self).__init__(configs, patch_len=patch_len, stride=stride)
         self.task_name = configs.task_name
-        if configs.enc_in != 3:
-            raise ValueError('PAttnSolarPhysics expects exactly 3 target channels: [ghi, dni, dhi].')
-        self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', configs.d_model))
-        self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
-        self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
-        self.context_head = nn.Linear(
-            configs.enc_in * self.d_model * self.patch_num,
-            self.pred_len * self.physics_hidden_dim,
+        self._init_solar_physics(
+            configs,
+            'PAttnSolarPhysics',
+            getattr(configs, 'd_model', configs.enc_in * 32),
         )
-        self.base_state_embed = nn.Linear(3, self.physics_hidden_dim)
-        self.physics_stack = SolarPhysicsStack(
-            input_dim=self.physics_hidden_dim,
-            hidden_dim=self.physics_hidden_dim,
-            num_layers=int(getattr(configs, 'physics_layers', 2)),
-            dropout=getattr(configs, 'dropout', 0.1),
-            kernel_size=int(getattr(configs, 'physics_kernel_size', 3)),
-            night_cos_threshold=self.night_cos_threshold,
-            eps=self.physics_eps,
-            use_gated_feedback=bool(getattr(configs, 'physics_gated_feedback', False)),
+        self._init_flat_context(
+            configs.enc_in * self.d_model * self.patch_num
         )
-
-    def _compute_cos_zenith(self, future_zenith):
-        return torch.cos(torch.deg2rad(future_zenith)).clamp(min=0.0)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, future_zenith=None):
         if future_zenith is None:
@@ -58,15 +41,7 @@ class Model(PAttnBackbone):
         base_out = base_out + means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1)
 
         context = self.context_head(enc_out.reshape(batch_size, -1))
-        context = context.reshape(batch_size, self.pred_len, self.physics_hidden_dim)
-        context = context + self.base_state_embed(base_out)
-        cos_zenith = self._compute_cos_zenith(future_zenith)
-        dec_out, _hidden = self.physics_stack(
-            context_seq=context,
-            base_state=base_out,
-            cos_zenith=cos_zenith,
-        )
-        return cache_solar_outputs(self, base_out, dec_out, future_zenith)
+        return self._apply_physics(context, base_out, future_zenith)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None, future_zenith=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':

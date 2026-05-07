@@ -164,7 +164,7 @@ class Model(nn.Module):
         # embedding
         zeros = torch.zeros([x_dec.shape[0], self.pred_len, x_dec.shape[2]], device=x_enc.device)
         seasonal_init_dec = torch.cat([seasonal_init_enc[:, -self.seq_len:, :], zeros], dim=1)
-        # 对齐时间特征：decoder 需要与 seasonal_init_dec 等长的时间戳
+
         x_mark_dec_full = torch.cat([x_mark_enc[:, -self.seq_len:, :], x_mark_dec], dim=1)
         dec_out = self.dec_embedding(seasonal_init_dec, x_mark_dec_full)
         dec_out = self.conv_trans(dec_out)

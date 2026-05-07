@@ -4,9 +4,8 @@ from torch import nn
 from layers.Embed import PatchEmbedding
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Transformer_EncDec import Encoder, EncoderLayer
-from layers.solar_physics import SolarPhysicsStack
 from models.PatchTST import Transpose
-from models._solar_physics_utils import cache_solar_outputs
+from models._solar_physics_utils import SolarPhysicsMixin
 
 
 class FlattenChannelHead(nn.Module):
@@ -38,7 +37,7 @@ class PerVariableForecastHead(nn.Module):
         return x
 
 
-class Model(nn.Module):
+class Model(nn.Module, SolarPhysicsMixin):
     def __init__(self, configs, patch_len=16, stride=8):
         super(Model, self).__init__()
         self.task_name = configs.task_name
@@ -48,10 +47,11 @@ class Model(nn.Module):
         if self.enc_in != 3:
             raise ValueError('PatchTSTSolarPhysics expects exactly 3 target channels: [ghi, dni, dhi].')
         patch_len = int(getattr(configs, 'patch_len', patch_len))
-        self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', configs.d_model))
-        self.physics_layers = int(getattr(configs, 'physics_layers', 2))
-        self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
-        self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
+        self._init_solar_physics(
+            configs,
+            'PatchTSTSolarPhysics',
+            getattr(configs, 'd_model', configs.enc_in * 32),
+        )
 
         padding = stride
         self.patch_embedding = PatchEmbedding(
@@ -93,20 +93,6 @@ class Model(nn.Module):
             configs.pred_len * self.physics_hidden_dim,
             head_dropout=configs.dropout,
         )
-        self.base_state_embed = nn.Linear(3, self.physics_hidden_dim)
-        self.physics_stack = SolarPhysicsStack(
-            input_dim=self.physics_hidden_dim,
-            hidden_dim=self.physics_hidden_dim,
-            num_layers=self.physics_layers,
-            dropout=configs.dropout,
-            kernel_size=int(getattr(configs, 'physics_kernel_size', 3)),
-            night_cos_threshold=self.night_cos_threshold,
-            eps=self.physics_eps,
-            use_gated_feedback=bool(getattr(configs, 'physics_gated_feedback', False)),
-        )
-
-    def _compute_cos_zenith(self, future_zenith):
-        return torch.cos(torch.deg2rad(future_zenith)).clamp(min=0.0)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, future_zenith=None):
         if future_zenith is None:
@@ -128,16 +114,7 @@ class Model(nn.Module):
         base_out = base_out + means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1)
 
         context = self.context_head(enc_out.reshape(enc_out.shape[0], -1))
-        context = context.reshape(enc_out.shape[0], self.pred_len, self.physics_hidden_dim)
-        context = context + self.base_state_embed(base_out)
-
-        cos_zenith = self._compute_cos_zenith(future_zenith)
-        dec_out, _hidden = self.physics_stack(
-            context_seq=context,
-            base_state=base_out,
-            cos_zenith=cos_zenith,
-        )
-        return cache_solar_outputs(self, base_out, dec_out, future_zenith)
+        return self._apply_physics(context, base_out, future_zenith)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None, future_zenith=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':

@@ -1,370 +1,58 @@
-from data_provider.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_M4, PSMSegLoader, \
-    MSLSegLoader, SMAPSegLoader, SMDSegLoader, SWATSegLoader, UEAloader
-from data_provider.data_loader_folsom import SlidingWindowLogicalDailySolarDataset, FastDataset
-from data_provider.data_load_stanford import Dataset_Stanford
-from data_provider.data_load_other import Dataset_Other
-from data_provider.uea import collate_fn
 from torch.utils.data import DataLoader
 
+from data_provider.data_load import Dataset
+
+
 ymax_dict = {
-    'Stanford': 29.5,
-    'Irr': [1366.0, 1004.0, 748.1],
-    'DE_wind_offshore.csv': [5742.0, 6901.0],
-    'DE_wind_onshore.csv': [44710.0, 40752.0],
-    'DE_wind.csv': [50452.0, 46064.0],
-    'Location1.csv': [94.1, 100, 76.3, 13.45, 20.65, 360, 360, 29.2, 0.9913],
-    'Location2.csv': [95.4, 100, 76.6, 18.27, 24.59, 360, 360, 29.0, 0.9859],
-    'Location3.csv': [101.7, 100, 78.7, 18.53, 24.2, 360, 360, 26.6, 0.9994],
-    'Location4.csv': [93.8, 100, 77.9, 14.26, 21.75, 360, 360, 26.4, 0.9888],
-    'bj1.csv': 500,
-    'Aotizhongxin.csv': 898,
-    'Changping.csv': 882,
-    'Dingling.csv': 881,
-    'Dongsi.csv': 737,
-    'Guanyuan.csv': 680,
-    'Gucheng.csv': 770,
-    'Huairou.csv': 762,
-    'Nongzhanguan.csv': 844,
-    'Shunyi.csv': 941,
-    'Tiantan.csv': 821,
-    'Wanliu.csv': 957,
-    'Wanshouxigong.csv': 999,
-    'Aotizhongxin_clean.csv': 898,
-    'Changping_clean.csv': 882,
-    'Dingling_clean.csv': 881,
-    'Dongsi_clean.csv': 737,
-    'Guanyuan_clean.csv': 680,
-    'Gucheng_clean.csv': 770,
-    'Huairou_clean.csv': 762,
-    'Nongzhanguan_clean.csv': 844,
-    'Shunyi_clean.csv': 941,
-    'Tiantan_clean.csv': 821,
-    'Wanliu_clean.csv': 957,
-    'Wanshouxigong_clean.csv': 999,
-    'DE_wind_offshore_clean.csv': 6990.36,
-    'DE_wind_onshore_clean.csv': 40929.67,
-    'DE_wind_clean.csv': 46205.63,
-    'NPRNGL.csv': 7.79,
-    'CCG.csv': 6.71,
-    'CRNN.csv': 25.85,
-    'MRD.csv': 15.28,
-    'flowedb5.csv': [95.0, 84.2, 360.0, 18900.0],
-    'flowedb2.csv': [101.0, 87.8, 360.0, 2150.0],
-    'flowedb3.csv': [105.0, 82.0, 360.0, 347000.0],
-    'flowedb4.csv': [105.0, 82.0, 360.0, 347000.0],
-    '13PV1.csv': 1016.84,
-    '13PV2.csv': 1051.16,
-    '13PV3.csv': 1021.69,
-    '13PV4.csv': 1027.86,
-    'folsom.csv': [1366.0, 1004.0, 748.1],
-    'Folsom_combined_no_zero.csv': [1466.0, 1004.0, 748.1],
-    'Folsom_combined.csv': [1466.0, 1004.0, 748.1],
-    '45.36_-90.05_2015_2024_nonzero.csv': [999.0, 1056.0, 656.0],
-    '34.05_-118.24_2015_2024_nonzero.csv': [1066.0, 1015.0, 601.0],
-    '31.1_-90.05_2015_2024_nonzero.csv': [1044.0, 1053.0, 552.0],
-    'Congo_no_zero.csv': [263.2202, 236.6564, 148.741],
-    'Germany_no_zero.csv': [239.8238, 255.692, 131.8923],
-    'NewDelhi_no_zero.csv': [267.5592, 252.4045, 156.8177],
+    'Folsom.csv': [1466.0, 1004.0, 748.1],
     'Congo.csv': [263.2202, 236.6564, 148.741],
     'Germany.csv': [239.8238, 255.692, 131.8923],
     'NewDelhi.csv': [267.5592, 252.4045, 156.8177],
-    'stanford.csv': 29.5,
-    '25.76_-80.19_2015_2024.csv': [1073.0, 1025.0, 548.0],
-    '39.74_-104.99_2015_2024.csv': [1080.0, 1083.0, 668.0],
-    '44.98_-93.27_2015_2024.csv': [1003.0, 1033.0, 630.0],
-    '25.76_-80.19_2015_2024_no_zero.csv': [1073.0, 1025.0, 548.0],
-    '39.74_-104.99_2015_2024_no_zero.csv': [1080.0, 1083.0, 668.0],
-    '44.98_-93.27_2015_2024_no_zero.csv': [1003.0, 1033.0, 630.0],
 }
 
 
 data_dict = {
-    'ETTh1': Dataset_ETT_hour,
-    'ETTh2': Dataset_ETT_hour,
-    'ETTm1': Dataset_ETT_minute,
-    'ETTm2': Dataset_ETT_minute,
-    'custom': Dataset_Custom,
-    'm4': Dataset_M4,
-    'PSM': PSMSegLoader,
-    'MSL': MSLSegLoader,
-    'SMAP': SMAPSegLoader,
-    'SMD': SMDSegLoader,
-    'SWAT': SWATSegLoader,
-    'UEA': UEAloader,
-    # 'Folsom': FastDataset,
-    'Folsom': SlidingWindowLogicalDailySolarDataset,
-    'Stanford': Dataset_Stanford,
-    'Irr': Dataset_Stanford,
-    'AQ': Dataset_Other,
-    'Wind': Dataset_Other,
-    'Water': Dataset_Other,
-    'Solar': Dataset_Other,
+    'Solar': Dataset,
 }
+
+
+def _loader(data_set, args, shuffle_flag, drop_last):
+    return DataLoader(
+        dataset=data_set,
+        batch_size=args.batch_size,
+        shuffle=shuffle_flag,
+        num_workers=args.num_workers,
+        drop_last=drop_last,
+    )
 
 
 def data_provider(args, flag):
     Data = data_dict[args.data]
-    timeenc = 0 if args.embed != 'timeF' else 1
 
     shuffle_flag = False if (flag == 'test' or flag == 'TEST') else True
     drop_last = False
-    batch_size = args.batch_size
-    freq = args.freq
 
-    if args.task_name == 'anomaly_detection':
-        drop_last = False
-        data_set = Data(
-            args = args,
-            root_path=args.root_path,
-            win_size=args.seq_len,
-            flag=flag,
-        )
-        print(flag, len(data_set))
-        data_loader = DataLoader(
-            data_set,
-            batch_size=batch_size,
-            shuffle=shuffle_flag,
-            num_workers=args.num_workers,
-            drop_last=drop_last)
-        return data_set, data_loader
-    elif args.task_name == 'classification':
-        drop_last = False
-        data_set = Data(
-            args = args,
-            root_path=args.root_path,
-            flag=flag,
-        )
-
-        data_loader = DataLoader(
-            data_set,
-            batch_size=batch_size,
-            shuffle=shuffle_flag,
-            num_workers=args.num_workers,
-            drop_last=drop_last,
-            collate_fn=lambda x: collate_fn(x, max_len=args.seq_len)
-        )
-        return data_set, data_loader
+    if "Folsom" in args.data_path:
+        sample_interval = 15
     else:
-        if args.data == 'm4':
-            drop_last = False
-
-        if args.data == 'Folsom':
-            Data = data_dict[args.data]
-            if flag == 'test':
-                shuffle_flag = False
-                drop_last = True
-
-            elif flag == 'valid':
-                shuffle_flag = True
-                drop_last = True
-
-            else:
-                shuffle_flag = True
-                drop_last = True
-
-            # 计算 label_len_hours 以匹配模型期望
-            # 对于5分钟频率数据，每小时12个点
-            points_per_hour = 12
-            label_len_hours = args.label_len // points_per_hour
-            
-            data_set = Data(
-                root_path=args.root_path,
-                data_path=args.data_path,
-                flag=flag,
-                seq_len_hours=args.seq_len_hours,
-                pred_len_hours=args.pred_len_hours,
-                label_len_hours=label_len_hours,  # 根据模型的label_len计算
-                day_start_time_str="16:00",
-                day_end_time_str="00:15",
-                stride_minutes=10,
-                features=args.features,
-                target='ghi_5min',
-                scale=True,
-                timeenc=0,
-                freq='5t'
-            )
-            print(len(data_set))
-            data_loader = DataLoader(
-                dataset=data_set,
-                batch_size=args.batch_size,
-                shuffle=shuffle_flag,
-                num_workers=args.num_workers,
-                drop_last=drop_last
-            )
-            return data_set, data_loader
-        elif args.data == 'Stanford':
-            data_set = Data(
-                args,
-                root_path=args.root_path,
-                flag=flag,
-                features='S',
-                data_path_trainval=args.data_path_trainval,
-                data_path_test=args.data_path_test,
-                target='target',
-                scale=True,
-                timeenc=0,
-                ymax=ymax_dict[args.data]
-            )
-            data_loader = DataLoader(
-                dataset=data_set,
-                batch_size=args.batch_size,
-                shuffle=shuffle_flag,
-                num_workers=args.num_workers,
-                drop_last=drop_last
-            )
-            return data_set, data_loader
-        elif args.data == 'Irr':
-            data_set = Data(
-                args,
-                root_path=args.root_path,
-                flag=flag,
-                features='S',
-                data_path_trainval=args.data_path_trainval,
-                data_path_test=args.data_path_test,
-                target='ghi',
-                scale=True,
-                timeenc=0,
-                ymax=ymax_dict[args.data]
-            )
-            data_loader = DataLoader(
-                dataset=data_set,
-                batch_size=args.batch_size,
-                shuffle=shuffle_flag,
-                num_workers=args.num_workers,
-                drop_last=drop_last
-            )
-            return data_set, data_loader
-        elif args.data == 'AQ':
-            data_set = Data(
-                args,
-                root_path=args.root_path,
-                flag=flag,
-                features='S',
-                data_path=args.data_path,
-                target='target',
-                scale=True,
-                timeenc=0,
-                ymax=ymax_dict[args.data_path]
-            )
-            data_loader = DataLoader(
-                dataset=data_set,
-                batch_size=args.batch_size,
-                shuffle=shuffle_flag,
-                num_workers=args.num_workers,
-                drop_last=drop_last
-            )
-            return data_set, data_loader
-        elif args.data == 'Wind':
-            if "DE_wind" in args.data_path:
-                sample_interval = 4
-            else:
-                sample_interval = 3
-            data_set = Data(
-                args,
-                root_path=args.root_path,
-                flag=flag,
-                features=args.features,
-                data_path=args.data_path,
-                sample_interval=sample_interval,
-                slide_step=12,
-                target='power',
-                scale=False,
-                timeenc=0,
-                ymax=None
-            )
-            data_loader = DataLoader(
-                dataset=data_set,
-                batch_size=args.batch_size,
-                shuffle=shuffle_flag,
-                num_workers=args.num_workers,
-                drop_last=drop_last
-            )
-            return data_set, data_loader
-        elif args.data == 'Water':
-            if "flowedb" in args.data_path:
-                sample_interval = 1
-                target = 'target'
-                scale = True
-                ymax = ymax_dict.get(args.data_path, 1.0)
-            elif "ResOpsUS" in args.data_path:
-                sample_interval = 1
-                target = 'storage'
-                scale = True
-                ymax = None  # will be set from data
-            else:
-                sample_interval = 4
-                target = 'target'
-                scale = True
-                ymax = ymax_dict.get(args.data_path, 1.0)
-            data_set = Data(
-                args,
-                root_path=args.root_path,
-                flag=flag,
-                features=args.features,
-                data_path=args.data_path,
-                sample_interval=sample_interval,
-                target=target,
-                scale=scale,
-                timeenc=0,
-                ymax=ymax
-            )
-            data_loader = DataLoader(
-                dataset=data_set,
-                batch_size=args.batch_size,
-                shuffle=shuffle_flag,
-                num_workers=args.num_workers,
-                drop_last=drop_last
-            )
-            return data_set, data_loader
-        elif args.data == 'Solar':
-            if "folsom" in args.data_path:
-                target = 'ghi'
-                sample_interval = 60
-            elif "Folsom_combined_no_zero" in args.data_path:
-                target = 'ghi'
-                sample_interval = 15
-            else:
-                target = 'ghi'
-                sample_interval = 1
-            data_set = Data(
-                args,
-                root_path=args.root_path,
-                flag=flag,
-                features=args.features,
-                data_path=args.data_path,
-                sample_interval=sample_interval,
-                slide_step=args.slide_step,
-                target=target,
-                scale=False,
-                timeenc=0,
-                ymax=ymax_dict[args.data_path]
-            )
-            data_loader = DataLoader(
-                dataset=data_set,
-                batch_size=args.batch_size,
-                shuffle=shuffle_flag,
-                num_workers=args.num_workers,
-                drop_last=drop_last
-            )
-            return data_set, data_loader
-        # else:
-        #     data_set = Data(
-        #         args = args,
-        #         root_path=args.root_path,
-        #         data_path=args.data_path,
-        #         flag=flag,
-        #         size=[args.seq_len, args.label_len, args.pred_len],
-        #         features=args.features,
-        #         target=args.target,
-        #         timeenc=timeenc,
-        #         freq=freq,
-        #         seasonal_patterns=args.seasonal_patterns
-        #     )
-        #     print(flag, len(data_set))
-        #     data_loader = DataLoader(
-        #         data_set,
-        #         batch_size=batch_size,
-        #         shuffle=shuffle_flag,
-        #         num_workers=args.num_workers,
-        #         drop_last=drop_last)
-        #     return data_set, data_loader
+        sample_interval = 1
+    data_set = Data(
+        args,
+        root_path=args.root_path,
+        flag=flag,
+        features=args.features,
+        data_path=args.data_path,
+        sample_interval=sample_interval,
+        slide_step=args.slide_step,
+        scale=False,
+        timeenc=0,
+        ymax=ymax_dict[args.data_path]
+    )
+    data_loader = DataLoader(
+        dataset=data_set,
+        batch_size=args.batch_size,
+        shuffle=shuffle_flag,
+        num_workers=args.num_workers,
+        drop_last=drop_last
+    )
+    return data_set, data_loader
