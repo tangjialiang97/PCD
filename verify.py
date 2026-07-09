@@ -44,10 +44,20 @@ def resolve_location(csv_path, latitude, longitude):
 
 
 def find_timestamp_column(df):
-    for column in ['timestamp', 'timeStamp', 'datetime']:
+    for column in ['timestamp', 'timeStamp', 'dtime', 'datetime']:
         if column in df.columns:
             return column
     return None
+
+
+def parse_timestamp(ts_series):
+    if pd.api.types.is_datetime64_any_dtype(ts_series):
+        return pd.to_datetime(ts_series, errors='coerce')
+    numeric = pd.to_numeric(ts_series, errors='coerce')
+    numeric_ratio = float(numeric.notna().mean()) if len(ts_series) else 0.0
+    if numeric_ratio > 0.8 and numeric.dropna().median() > 20000:
+        return pd.to_datetime(numeric, unit='D', origin='1899-12-30', errors='coerce')
+    return pd.to_datetime(ts_series, errors='coerce')
 
 
 def compute_cos_zenith(df, csv_path, args):
@@ -72,7 +82,7 @@ def compute_cos_zenith(df, csv_path, args):
         )
 
     latitude, longitude = resolve_location(csv_path, args.latitude, args.longitude)
-    ts = pd.to_datetime(df[timestamp_col], errors='coerce')
+    ts = parse_timestamp(df[timestamp_col])
     if ts.isna().any():
         raise ValueError("Invalid timestamp values found in '{}'.".format(timestamp_col))
 

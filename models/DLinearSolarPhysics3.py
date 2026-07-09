@@ -3,14 +3,18 @@ from torch import nn
 
 from layers.solar_physics_3 import SolarPhysicsStack
 from models.DLinear import Model as DLinearBackbone
-from models._solar_physics_utils import cache_solar_outputs, init_solar_power_mapping
+from models._solar_physics_utils import (
+    cache_solar_outputs,
+    init_solar_power_mapping,
+    select_physics_irradiance,
+)
 
 
 class Model(DLinearBackbone):
     def __init__(self, configs):
         super(Model, self).__init__(configs, individual=getattr(configs, 'individual', False))
-        if configs.enc_in != 3:
-            raise ValueError('DLinearSolarPhysics3 expects exactly 3 target channels: [ghi, dni, dhi].')
+        if configs.enc_in not in (3, 4):
+            raise ValueError('DLinearSolarPhysics3 expects [ghi, dni, dhi] or [ghi, dni, dhi, power].')
         self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', configs.enc_in * 32))
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
@@ -42,7 +46,7 @@ class Model(DLinearBackbone):
         base_out = super(Model, self).forecast(x_enc)
         context = self.history_context(x_enc.reshape(x_enc.shape[0], -1))
         context = context.reshape(x_enc.shape[0], self.pred_len, self.physics_hidden_dim)
-        context = context + self.base_state_embed(base_out)
+        context = context + self.base_state_embed(select_physics_irradiance(base_out))
         cos_zenith = self._compute_cos_zenith(future_zenith)
         dec_out, _hidden = self.physics_stack(context, cos_zenith)
         return cache_solar_outputs(self, base_out, dec_out, future_zenith)

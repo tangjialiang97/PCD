@@ -2,13 +2,17 @@
 # Example plant-power training recipe:
 #   1) offline pvlib columns from plant + weather tables
 #   2) SolarPhysics forecast of [ghi,dni,dhi] (dni/dhi via Erbs offline)
-#   3) PVWatts prior + residual_mlp map to observe_power
+#   3) PVWatts prior + residual_mlp map, then fuse with direct power forecast
 set -uo pipefail
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 gpu_id="${gpu_id:-0}"
 debug_mode="${debug_mode:-False}"
 log_file="scripts/solar/plant_power.log"
+power_output="${solar_power_output:-append}"
+fusion_mode="${fusion_mode:-learned}"
+direct_head="${direct_head:-linear}"
+channel_count=4
 
 # --- paths you should edit ---
 plant_table="${plant_table:-dataset_expample/qingda.xlsx}"
@@ -64,14 +68,14 @@ for map_mode in "${map_modes[@]}"; do
 for pred_len in "${pred_lens[@]}"; do
   label_len=0
   batch_size=256
-  echo "[RUN] model=${model_name} map=${map_mode} prior=pvwatts pred_len=${pred_len}" | tee -a "$log_file"
+  echo "[RUN] model=${model_name} map=${map_mode} prior=pvwatts fusion=${fusion_mode} output=${power_output} pred_len=${pred_len}" | tee -a "$log_file"
   if ! python -u run.py \
     --task_name long_term_forecast \
     --is_training 1 \
     --debug "$debug_mode" \
     --root_path ./data/solar/ \
     --data_path "$data_path" \
-    --model_id "plant_${pred_len}_${map_mode}" \
+    --model_id "plant_${pred_len}_${map_mode}_${power_output}_${fusion_mode}" \
     --model "$model_name" \
     --data Solar \
     --features M \
@@ -82,16 +86,18 @@ for pred_len in "${pred_lens[@]}"; do
     --e_layers 2 \
     --d_layers 1 \
     --factor 3 \
-    --enc_in 3 \
-    --dec_in 3 \
-    --c_out 3 \
+    --enc_in "$channel_count" \
+    --dec_in "$channel_count" \
+    --c_out "$channel_count" \
     --des 'PlantPower' \
     --d_model 128 \
     --d_ff 128 \
     --itr 1 \
-    --solar_power_output power \
+    --solar_power_output "$power_output" \
     --solar_power_map "$map_mode" \
     --solar_power_prior pvwatts \
+    --solar_power_fusion "$fusion_mode" \
+    --solar_power_direct_head "$direct_head" \
     --solar_power_temp_cell_method noct \
     --solar_power_gamma_pdc -0.004 \
     --solar_power_capacity 1.0 \

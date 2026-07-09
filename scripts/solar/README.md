@@ -9,7 +9,7 @@
 |------|------|
 | `scripts/solar/build_plant_power_dataset.py` | 真实电站 + 气象 → 离线 `power_pvlib` 等列 |
 | `scripts/solar/build_power_dataset.py` | Congo 等仅 GHI 数据 → 合成 power 标签 |
-| `models/_solar_physics_utils.py` | 模型内 `SolarPowerMap`（prior + 映射头） |
+| `models/_solar_physics_utils.py` | 模型内 `SolarPowerMap` + direct power + fusion |
 | `scripts/solar/plant_power.sh` | 电站功率一键流程 |
 | `scripts/solar/power.sh` | Congo / 合成功率实验 |
 | `run.py` | 训练入口与全部 CLI |
@@ -21,7 +21,8 @@
 ```text
                     ┌─────────────────────────────┐
   历史 GHI/DNI/DHI  │  时序 backbone + SolarPhysics │
-  (+ zenith)        │  可行集投影 → 预测 GHI        │
+  (/power 可选)     │  可行集投影 → 预测 GHI        │
+  (+ zenith)        │                             │
                     └──────────────┬──────────────┘
                                    │ projected GHI
                                    ▼
@@ -30,11 +31,19 @@
                     │  prior: linear | pvwatts    │
                     │  head:  fixed | affine |    │
                     │         residual_mlp |      │
-                    │         learned             │
+                    │         learned | ghi_mlp   │
                     └──────────────┬──────────────┘
+                                   │ mapped power
+       direct power（第4通道预测；无第4通道时用 fallback head）
                                    │
                                    ▼
-                              预测 power
+                    ┌─────────────────────────────┐
+                    │  SolarPowerFusion           │
+                    │  mapped/direct/average/     │
+                    │  gated/learned              │
+                    └──────────────┬──────────────┘
+                                   │
+                              最终 power
                                    │
                      监督标签：observe_power
                      （或合成 power / power_pvlib 分析）
@@ -43,9 +52,10 @@
 两层含义不要混：
 
 1. **离线列**：用 pvlib 在 CSV 里写出 `power_pvlib`，用于分析、标定 `pdc0`、对照。  
-2. **模型内映射**：训练/推理时，在投影 GHI 后用可微 prior + 可选残差头得到 power。
+2. **模型内映射**：训练/推理时，在投影 GHI 后用可微 prior + 可选残差头得到 mapped power。
+3. **最终融合**：mapped power 和直接预测的 power 通过 `--solar_power_fusion` 得到最终 power。
 
-推荐组合：**离线 pvlib 造表 + 模型内 `pvwatts` prior + `residual_mlp` 残差**，标签用真实 `observe_power`。
+推荐组合：**离线 pvlib 造表 + 模型内 `pvwatts` prior + `residual_mlp` 残差 + `learned`/`gated` 融合**，标签用真实 `observe_power`。
 
 ---
 
@@ -85,6 +95,16 @@
 | `latitude` | `29.919` | 太阳位置 / cos zenith |
 | `longitude` | `100.641` | 同上 |
 | `timezone` | `Asia/Shanghai` | 无时区时间戳本地化 |
+
+### 2.2 最小训练 CSV
+
+如果数据集中已经有真实发电量，最小列可以只有：
+
+```text
+dtime, ghi, dni, dhi, power
+```
+
+读取时会自动按 `ghi,dni,dhi,power` 排列。`SolarPhysics` 仍只对前三列做物理闭包投影；当 `enc_in=4` 时，第 4 列 `power` 会进入 backbone，backbone 的第 4 个输出作为直接预测 power 分支。
 
 **可选配置（无则自动/默认）**
 
@@ -156,8 +176,30 @@ P_{\mathrm{pvwatts}} = C \cdot \frac{G}{G_{\mathrm{ref}}} \cdot \bigl(1 + \gamma
 | `affine` | \(P = \mathrm{softplus}(a)\cdot\mathrm{prior} + b\) |
 | `residual_mlp` | \(P = \mathrm{prior} + \mathrm{MLP}([g_n, p_n, \cos z])\)（末层零初始化） |
 | `learned` | \(P = \mathrm{softplus}(\mathrm{MLP}([g_n,\cos z]))\cdot C\)（不加 prior） |
+| `ghi_mlp` | \(P = \mathrm{softplus}(\mathrm{MLP}([g_n]))\cdot C\)（严格只用 GHI） |
 
 其中 \(g_n=G/G_{\mathrm{ref}}\)，\(p_n=\mathrm{prior}/C\)。
+
+### 3.4 直接 power 分支与最终融合
+
+模型最终监督的是：
+
+\[
+P_{\mathrm{final}}=\mathrm{Fusion}(P_{\mathrm{map}}, P_{\mathrm{direct}})
+\]
+
+- \(P_{\mathrm{map}}\)：先通过物理模型得到可行集内的 `ghi`，再用 `--solar_power_map` 映射得到。
+- \(P_{\mathrm{direct}}\)：当 `enc_in=4` 且输入包含 `power` 时，使用 backbone 的第 4 个输出；当 `enc_in=3` 时，使用 fallback direct head。
+
+| `--solar_power_fusion` | 含义 |
+|------------------------|------|
+| `mapped` | 只用 \(P_{\mathrm{map}}\)（兼容旧逻辑） |
+| `direct` | 只用 \(P_{\mathrm{direct}}\) |
+| `average` | 两者平均 |
+| `gated` | 学一个全局门控 \(\alpha P_{\mathrm{map}}+(1-\alpha)P_{\mathrm{direct}}\) |
+| `learned` | 根据 `[P_map, P_direct, ghi_n, cos_z]` 学逐时刻门控 |
+
+`--solar_power_map ghi_mlp` 是“只从 GHI 学映射到 power”的方案；它同样可以再配 `--solar_power_fusion gated/learned` 与直接预测 power 结合。
 
 ---
 
@@ -198,7 +240,7 @@ python scripts/solar/build_plant_power_dataset.py \
 
 请记下 `pdc0`，训练时传给 `--solar_power_capacity`。
 
-**Step 2 — 训练（PVWatts prior + 残差 MLP）**
+**Step 2 — 训练（四通道输出 + PVWatts prior + 残差 MLP + learned 融合）**
 
 ```bash
 python -u run.py \
@@ -213,12 +255,13 @@ python -u run.py \
   --pred_len 24 \
   --label_len 0 \
   --batch_size 256 \
-  --enc_in 3 --dec_in 3 --c_out 3 \
+  --enc_in 4 --dec_in 4 --c_out 4 \
   --d_model 128 --d_ff 128 \
   --des PlantPower \
-  --solar_power_output power \
+  --solar_power_output append \
   --solar_power_map residual_mlp \
   --solar_power_prior pvwatts \
+  --solar_power_fusion learned \
   --solar_power_capacity <上一步的pdc0> \
   --solar_power_ghi_ref 1000.0 \
   --solar_power_gamma_pdc -0.004 \
@@ -226,6 +269,8 @@ python -u run.py \
   --solar_power_temp_amb 20.0 \
   --gpu 0
 ```
+
+此时模型输出监督列为 `[ghi,dni,dhi,power]`，最终 `power` 是 \(P_{\mathrm{map}}\) 和 \(P_{\mathrm{direct}}\) 的融合结果。若只训练/评估发电量，把 `--solar_power_output append` 改为 `power` 即可。
 
 **或一键脚本**（先改脚本内 `plant_table` / `weather_table`）：
 
@@ -292,13 +337,18 @@ PY
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `--solar_power_output` | `irradiance` | `irradiance` \| `power` \| `append` |
-| `--solar_power_map` | `fixed` | `fixed` \| `affine` \| `residual_mlp` \| `learned` |
+| `--solar_power_map` | `fixed` | `fixed` \| `affine` \| `residual_mlp` \| `learned` \| `ghi_mlp` |
 | `--solar_power_prior` | `linear` | `linear` \| `pvwatts` |
 | `--solar_power_capacity` | `1.0` | 对应 \(C\) / `pdc0` |
 | `--solar_power_ghi_ref` | `1000` | \(G_{\mathrm{ref}}\) |
 | `--solar_power_clip` | `False` | 是否截断 \(G/G_{\mathrm{ref}}\le 1\) |
 | `--solar_power_map_hidden` | `16` | 残差/纯学习 MLP 隐层 |
 | `--solar_power_map_dropout` | `0.0` | MLP dropout |
+| `--solar_power_fusion` | `mapped` | `mapped` \| `direct` \| `average` \| `gated` \| `learned` |
+| `--solar_power_direct_head` | `linear` | `enc_in=3` 时 fallback direct head：`linear` \| `mlp` |
+| `--solar_power_direct_hidden` | `16` | fallback direct MLP 隐层 |
+| `--solar_power_fusion_hidden` | `16` | learned fusion gate 隐层 |
+| `--solar_power_fusion_gate_init` | `2.0` | 初始更偏向 mapped 分支的门控 logit |
 | `--solar_power_gamma_pdc` | `-0.004` | PVWatts \(\gamma\) |
 | `--solar_power_temp_ref` | `25` | 参考温度 |
 | `--solar_power_temp_amb` | `20` | 模型内缺气温时的环境温度 |
@@ -307,25 +357,32 @@ PY
 | `--solar_power_faiman_u0/u1` | `25` / `6.84` | Faiman 系数 |
 | `--solar_power_wind_default` | `1.0` | 模型内缺风速时的默认值 |
 
-功率监督时请设：
+只监督功率时请设：
 
 ```text
 --solar_power_output power
 ```
 
-（`run.py` 会将 `target` 置为 `power`。）
+同时监督 `[ghi,dni,dhi,power]` 时请设：
+
+```text
+--solar_power_output append
+```
+
+（`power` 模式下 `run.py` 会将 `target` 置为 `power`。）
 
 ---
 
 ## 6. 推荐实验矩阵
 
-| 目的 | 数据 | map | prior | capacity |
-|------|------|-----|-------|----------|
-| 离线物理 prior 质量 | 电站 CSV | — | 看 `power_pvlib` | auto `pdc0` |
-| 线性 prior + 残差 | 电站 / Congo | `residual_mlp` | `linear` | 估好的 \(C\) |
-| **主推：PVWatts + 残差** | 电站 | `residual_mlp` | `pvwatts` | builder 的 `pdc0` |
-| 纯学习映射 | 电站 | `learned` | 任意（不进加和） | 尺度参考 |
-| 仅 prior 无学习 | 任意 | `fixed` | `linear`/`pvwatts` | 对齐标签尺度 |
+| 目的 | 数据 | map | prior | fusion | capacity |
+|------|------|-----|-------|--------|----------|
+| 离线物理 prior 质量 | 电站 CSV | — | 看 `power_pvlib` | — | auto `pdc0` |
+| 线性 prior + 残差 | 电站 / Congo | `residual_mlp` | `linear` | `gated` | 估好的 \(C\) |
+| **主推：PVWatts + 残差 + 融合** | 电站 | `residual_mlp` | `pvwatts` | `learned` | builder 的 `pdc0` |
+| 纯学习映射 + 融合 | 电站 | `learned` | 任意（不进加和） | `learned` | 尺度参考 |
+| 严格 GHI-only 映射 + 融合 | 最小列数据 | `ghi_mlp` | 任意（不进加和） | `gated`/`learned` | 尺度参考 |
+| 仅 prior 无学习 | 任意 | `fixed` | `linear`/`pvwatts` | `mapped` | 对齐标签尺度 |
 
 ---
 

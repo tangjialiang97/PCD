@@ -7,8 +7,11 @@ from layers.solar_physics import SolarPhysicsStack
 
 
 VALID_POWER_OUTPUT_MODES = {'irradiance', 'power', 'append'}
-VALID_POWER_MAP_MODES = {'fixed', 'affine', 'residual_mlp', 'learned'}
+VALID_POWER_MAP_MODES = {'fixed', 'affine', 'residual_mlp', 'learned', 'ghi_mlp'}
 VALID_POWER_PRIOR_MODES = {'linear', 'pvwatts'}
+VALID_POWER_FUSION_MODES = {'mapped', 'direct', 'average', 'gated', 'learned'}
+VALID_DIRECT_POWER_HEAD_MODES = {'linear', 'mlp'}
+PHYSICS_IRRADIANCE_DIM = 3
 
 
 def _cached_tensor(value):
@@ -93,6 +96,31 @@ def _build_mlp(in_dim, hidden_dim, dropout):
     )
 
 
+def _softplus_inverse(value):
+    value = max(float(value), 1e-8)
+    return math.log(math.exp(value) - 1.0)
+
+
+def _resolve_cos_like(reference, cos_zenith):
+    if cos_zenith is None:
+        return torch.ones_like(reference)
+    if not torch.is_tensor(cos_zenith):
+        cos_zenith = torch.as_tensor(cos_zenith, device=reference.device, dtype=reference.dtype)
+    cos_zenith = cos_zenith.to(device=reference.device, dtype=reference.dtype)
+    if cos_zenith.dim() == reference.dim() - 1:
+        cos_zenith = cos_zenith.unsqueeze(-1)
+    if cos_zenith.shape[:-1] != reference.shape[:-1]:
+        raise ValueError(
+            'cos_zenith shape {} is incompatible with reference shape {}.'.format(
+                tuple(cos_zenith.shape),
+                tuple(reference.shape),
+            )
+        )
+    if cos_zenith.shape[-1] != 1:
+        cos_zenith = cos_zenith[..., :1]
+    return cos_zenith.clamp(min=0.0)
+
+
 class SolarPowerMap(nn.Module):
     """Map projected GHI to power with selectable prior + head.
 
@@ -114,6 +142,8 @@ class SolarPowerMap(nn.Module):
         P = prior + MLP([ghi_n, prior_n, cos_z])   # zero-init last layer
     learned:
         P = softplus(MLP([ghi_n, cos_z])) * capacity  # no prior add
+    ghi_mlp:
+        P = softplus(MLP([ghi_n])) * capacity  # strict GHI-only map
     """
 
     def __init__(
@@ -190,6 +220,10 @@ class SolarPowerMap(nn.Module):
         elif mode == 'learned':
             self.mlp = _build_mlp(2, self.hidden_dim, self.dropout)
             # softplus(bias)*capacity starts near ~1e-3*capacity (night-safe).
+            nn.init.zeros_(self.mlp[-1].weight)
+            nn.init.constant_(self.mlp[-1].bias, math.log(math.exp(1e-3) - 1.0))
+        elif mode == 'ghi_mlp':
+            self.mlp = _build_mlp(1, self.hidden_dim, self.dropout)
             nn.init.zeros_(self.mlp[-1].weight)
             nn.init.constant_(self.mlp[-1].bias, math.log(math.exp(1e-3) - 1.0))
 
@@ -304,10 +338,185 @@ class SolarPowerMap(nn.Module):
             cos_z = self._resolve_cos_zenith(ghi, cos_zenith)
             features = torch.cat([ghi_n, cos_z], dim=-1)
             power = torch.nn.functional.softplus(self.mlp(features)) * self.capacity
+        elif self.mode == 'ghi_mlp':
+            power = torch.nn.functional.softplus(self.mlp(ghi_n)) * self.capacity
         else:
             raise RuntimeError('Unhandled solar_power_map mode: {!r}'.format(self.mode))
 
         return torch.clamp(power, min=0.0)
+
+
+class SolarDirectPowerHead(nn.Module):
+    """Predict power directly from the model state when no raw power channel exists.
+
+    If the backbone forecasts four channels, the fourth channel is used as the
+    direct power forecast. This head is the fallback for three-channel backbones.
+    """
+
+    def __init__(
+        self,
+        mode='linear',
+        capacity=1.0,
+        ghi_ref=1000.0,
+        clip=False,
+        hidden_dim=16,
+        dropout=0.0,
+        input_dim=7,
+    ):
+        super(SolarDirectPowerHead, self).__init__()
+        mode = str(mode).lower()
+        if mode not in VALID_DIRECT_POWER_HEAD_MODES:
+            raise ValueError(
+                'solar_power_direct_head must be one of {}, got {!r}.'.format(
+                    sorted(VALID_DIRECT_POWER_HEAD_MODES),
+                    mode,
+                )
+            )
+        if hidden_dim <= 0:
+            raise ValueError('solar_power_direct_hidden must be positive.')
+        if ghi_ref <= 0:
+            raise ValueError('solar_power_ghi_ref must be positive.')
+
+        self.mode = mode
+        self.capacity = float(capacity)
+        self.ghi_ref = float(ghi_ref)
+        self.clip = bool(clip)
+        self.hidden_dim = int(hidden_dim)
+
+        if mode == 'linear':
+            self.net = nn.Linear(input_dim, 1)
+        else:
+            self.net = _build_mlp(input_dim, self.hidden_dim, dropout)
+
+        last = self.net if isinstance(self.net, nn.Linear) else self.net[-1]
+        nn.init.zeros_(last.weight)
+        nn.init.constant_(last.bias, _softplus_inverse(1e-3))
+
+    def _normalize_irradiance(self, values):
+        normalized = torch.clamp(values, min=0.0) / self.ghi_ref
+        if self.clip:
+            normalized = torch.clamp(normalized, max=1.0)
+        return normalized
+
+    def forward(self, base_irradiance, projected_irradiance, cos_zenith=None):
+        if base_irradiance.shape[-1] != PHYSICS_IRRADIANCE_DIM:
+            raise ValueError(
+                'SolarDirectPowerHead expects base_irradiance[..., 3], got {}.'.format(
+                    tuple(base_irradiance.shape),
+                )
+            )
+        if projected_irradiance.shape[-1] != PHYSICS_IRRADIANCE_DIM:
+            raise ValueError(
+                'SolarDirectPowerHead expects projected_irradiance[..., 3], got {}.'.format(
+                    tuple(projected_irradiance.shape),
+                )
+            )
+        cos_z = _resolve_cos_like(projected_irradiance[..., 0:1], cos_zenith)
+        features = torch.cat(
+            [
+                self._normalize_irradiance(base_irradiance),
+                self._normalize_irradiance(projected_irradiance),
+                cos_z,
+            ],
+            dim=-1,
+        )
+        return torch.nn.functional.softplus(self.net(features)) * self.capacity
+
+
+class SolarPowerFusion(nn.Module):
+    """Fuse GHI-mapped power and directly forecast power."""
+
+    def __init__(
+        self,
+        mode='mapped',
+        capacity=1.0,
+        ghi_ref=1000.0,
+        clip=False,
+        hidden_dim=16,
+        dropout=0.0,
+        gate_init=2.0,
+    ):
+        super(SolarPowerFusion, self).__init__()
+        mode = str(mode).lower()
+        if mode not in VALID_POWER_FUSION_MODES:
+            raise ValueError(
+                'solar_power_fusion must be one of {}, got {!r}.'.format(
+                    sorted(VALID_POWER_FUSION_MODES),
+                    mode,
+                )
+            )
+        if hidden_dim <= 0:
+            raise ValueError('solar_power_fusion_hidden must be positive.')
+        if ghi_ref <= 0:
+            raise ValueError('solar_power_ghi_ref must be positive.')
+
+        self.mode = mode
+        self.capacity = float(capacity)
+        self.ghi_ref = float(ghi_ref)
+        self.clip = bool(clip)
+        self.hidden_dim = int(hidden_dim)
+        self.gate_init = float(gate_init)
+        self.raw_gate = None
+        self.gate_net = None
+        self.latest_gate = None
+
+        if mode == 'gated':
+            self.raw_gate = nn.Parameter(torch.tensor(self.gate_init, dtype=torch.float32))
+        elif mode == 'learned':
+            self.gate_net = nn.Sequential(
+                nn.Linear(4, self.hidden_dim),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(self.hidden_dim, 1),
+            )
+            nn.init.zeros_(self.gate_net[-1].weight)
+            nn.init.constant_(self.gate_net[-1].bias, self.gate_init)
+
+    def _normalize_ghi(self, ghi):
+        normalized = torch.clamp(ghi, min=0.0) / self.ghi_ref
+        if self.clip:
+            normalized = torch.clamp(normalized, max=1.0)
+        return normalized
+
+    def _normalize_power(self, power):
+        return power / self.capacity if self.capacity > 0 else power
+
+    def forward(self, mapped_power, direct_power, projected_ghi, cos_zenith=None):
+        if direct_power is None:
+            self.latest_gate = None
+            return mapped_power
+
+        if self.mode == 'mapped':
+            self.latest_gate = None
+            return mapped_power
+        if self.mode == 'direct':
+            self.latest_gate = None
+            return torch.clamp(direct_power, min=0.0)
+        if self.mode == 'average':
+            self.latest_gate = None
+            return torch.clamp(0.5 * (mapped_power + direct_power), min=0.0)
+
+        if self.mode == 'gated':
+            gate = torch.sigmoid(self.raw_gate).to(device=mapped_power.device, dtype=mapped_power.dtype)
+            self.latest_gate = _cached_tensor(gate)
+            return torch.clamp(gate * mapped_power + (1.0 - gate) * direct_power, min=0.0)
+
+        if self.mode == 'learned':
+            cos_z = _resolve_cos_like(mapped_power, cos_zenith)
+            features = torch.cat(
+                [
+                    self._normalize_power(mapped_power),
+                    self._normalize_power(direct_power),
+                    self._normalize_ghi(projected_ghi),
+                    cos_z,
+                ],
+                dim=-1,
+            )
+            gate = torch.sigmoid(self.gate_net(features))
+            self.latest_gate = _cached_tensor(gate)
+            return torch.clamp(gate * mapped_power + (1.0 - gate) * direct_power, min=0.0)
+
+        raise RuntimeError('Unhandled solar_power_fusion mode: {!r}'.format(self.mode))
 
 
 def init_solar_power_mapping(model, configs):
@@ -338,11 +547,32 @@ def init_solar_power_mapping(model, configs):
             )
         )
 
+    fusion_mode = str(getattr(configs, 'solar_power_fusion', 'mapped')).lower()
+    if fusion_mode not in VALID_POWER_FUSION_MODES:
+        raise ValueError(
+            'solar_power_fusion must be one of {}, got {!r}.'.format(
+                sorted(VALID_POWER_FUSION_MODES),
+                fusion_mode,
+            )
+        )
+
+    direct_head_mode = str(getattr(configs, 'solar_power_direct_head', 'linear')).lower()
+    if direct_head_mode not in VALID_DIRECT_POWER_HEAD_MODES:
+        raise ValueError(
+            'solar_power_direct_head must be one of {}, got {!r}.'.format(
+                sorted(VALID_DIRECT_POWER_HEAD_MODES),
+                direct_head_mode,
+            )
+        )
+
     capacity = float(getattr(configs, 'solar_power_capacity', 1.0))
     ghi_ref = float(getattr(configs, 'solar_power_ghi_ref', 1000.0))
     clip = bool(getattr(configs, 'solar_power_clip', False))
     hidden_dim = int(getattr(configs, 'solar_power_map_hidden', 16))
     dropout = float(getattr(configs, 'solar_power_map_dropout', 0.0))
+    direct_hidden_dim = int(getattr(configs, 'solar_power_direct_hidden', hidden_dim))
+    fusion_hidden_dim = int(getattr(configs, 'solar_power_fusion_hidden', hidden_dim))
+    fusion_gate_init = float(getattr(configs, 'solar_power_fusion_gate_init', 2.0))
     gamma_pdc = float(getattr(configs, 'solar_power_gamma_pdc', -0.004))
     temp_ref = float(getattr(configs, 'solar_power_temp_ref', 25.0))
     temp_amb = float(getattr(configs, 'solar_power_temp_amb', 20.0))
@@ -358,6 +588,10 @@ def init_solar_power_mapping(model, configs):
         raise ValueError('solar_power_ghi_ref must be positive.')
     if hidden_dim <= 0:
         raise ValueError('solar_power_map_hidden must be positive.')
+    if direct_hidden_dim <= 0:
+        raise ValueError('solar_power_direct_hidden must be positive.')
+    if fusion_hidden_dim <= 0:
+        raise ValueError('solar_power_fusion_hidden must be positive.')
 
     model.solar_power_output = output_mode
     model.solar_power_capacity = capacity
@@ -367,6 +601,11 @@ def init_solar_power_mapping(model, configs):
     model.solar_power_prior = prior_mode
     model.solar_power_map_hidden = hidden_dim
     model.solar_power_map_dropout = dropout
+    model.solar_power_fusion = fusion_mode
+    model.solar_power_direct_head_mode = direct_head_mode
+    model.solar_power_direct_hidden = direct_hidden_dim
+    model.solar_power_fusion_hidden = fusion_hidden_dim
+    model.solar_power_fusion_gate_init = fusion_gate_init
     model.solar_power_gamma_pdc = gamma_pdc
     model.solar_power_temp_ref = temp_ref
     model.solar_power_temp_amb = temp_amb
@@ -390,6 +629,23 @@ def init_solar_power_mapping(model, configs):
         faiman_u0=faiman_u0,
         faiman_u1=faiman_u1,
         wind_default=wind_default,
+    )
+    model.solar_direct_power_head = SolarDirectPowerHead(
+        mode=direct_head_mode,
+        capacity=capacity,
+        ghi_ref=ghi_ref,
+        clip=clip,
+        hidden_dim=direct_hidden_dim,
+        dropout=dropout,
+    )
+    model.solar_power_fusion_module = SolarPowerFusion(
+        mode=fusion_mode,
+        capacity=capacity,
+        ghi_ref=ghi_ref,
+        clip=clip,
+        hidden_dim=fusion_hidden_dim,
+        dropout=dropout,
+        gate_init=fusion_gate_init,
     )
 
 
@@ -421,6 +677,42 @@ def map_projected_ghi_to_power(
     )
 
 
+def select_physics_irradiance(base_out):
+    if base_out.shape[-1] < PHYSICS_IRRADIANCE_DIM:
+        raise ValueError(
+            'SolarPhysics expects at least three channels [ghi, dni, dhi], got {}.'.format(
+                tuple(base_out.shape),
+            )
+        )
+    return base_out[..., :PHYSICS_IRRADIANCE_DIM]
+
+
+def map_direct_power(model, base_out, projected_out, cos_zenith=None):
+    if base_out.shape[-1] >= PHYSICS_IRRADIANCE_DIM + 1:
+        return torch.clamp(base_out[..., PHYSICS_IRRADIANCE_DIM:PHYSICS_IRRADIANCE_DIM + 1], min=0.0)
+
+    direct_head = getattr(model, 'solar_direct_power_head', None)
+    if direct_head is None:
+        return None
+    return direct_head(
+        select_physics_irradiance(base_out),
+        projected_out[..., :PHYSICS_IRRADIANCE_DIM],
+        cos_zenith=cos_zenith,
+    )
+
+
+def fuse_solar_power(model, mapped_power, direct_power, projected_out, cos_zenith=None):
+    fusion_module = getattr(model, 'solar_power_fusion_module', None)
+    if fusion_module is None:
+        return mapped_power
+    return fusion_module(
+        mapped_power,
+        direct_power,
+        projected_out[..., 0:1],
+        cos_zenith=cos_zenith,
+    )
+
+
 def cache_solar_outputs(
     model,
     base_out,
@@ -445,7 +737,7 @@ def cache_solar_outputs(
     if temp_cell is None:
         temp_cell = getattr(model, 'latest_temp_cell', None)
 
-    power_out = map_projected_ghi_to_power(
+    mapped_power_out = map_projected_ghi_to_power(
         model,
         projected_out,
         cos_zenith=cos_zenith,
@@ -453,7 +745,24 @@ def cache_solar_outputs(
         wind_speed=wind_speed,
         temp_cell=temp_cell,
     )
+    direct_power_out = map_direct_power(
+        model,
+        base_out,
+        projected_out,
+        cos_zenith=cos_zenith,
+    )
+    power_out = fuse_solar_power(
+        model,
+        mapped_power_out,
+        direct_power_out,
+        projected_out,
+        cos_zenith=cos_zenith,
+    )
+    model.latest_mapped_power_out = _cached_tensor(mapped_power_out)
+    model.latest_direct_power_out = _cached_tensor(direct_power_out)
     model.latest_power_out = _cached_tensor(power_out)
+    power_fusion = getattr(model, 'solar_power_fusion_module', None)
+    model.latest_power_fusion_gate = None if power_fusion is None else getattr(power_fusion, 'latest_gate', None)
     power_map = getattr(model, 'solar_power_map', None)
     if power_map is not None:
         model.latest_power_prior = _cached_tensor(
@@ -475,9 +784,9 @@ def cache_solar_outputs(
 
 class SolarPhysicsMixin:
     def _init_solar_physics(self, configs, model_name, default_hidden_dim):
-        if configs.enc_in != 3:
+        if configs.enc_in not in (3, 4):
             raise ValueError(
-                f'{model_name} expects exactly 3 target channels: [ghi, dni, dhi].'
+                f'{model_name} expects [ghi, dni, dhi] or [ghi, dni, dhi, power].'
             )
 
         self.physics_model_name = model_name
@@ -533,7 +842,8 @@ class SolarPhysicsMixin:
         return torch.cos(torch.deg2rad(future_zenith)).clamp(min=0.0)
 
     def _build_physics_context(self, learned_context, base_out):
-        base_context = self.base_state_embed(base_out)
+        base_irradiance = select_physics_irradiance(base_out)
+        base_context = self.base_state_embed(base_irradiance)
         if self.physics_context_mode == 'base_only':
             return base_context
 
@@ -543,7 +853,7 @@ class SolarPhysicsMixin:
             )
         if learned_context.dim() == 2:
             learned_context = learned_context.reshape(
-                base_out.shape[0], self.pred_len, self.physics_hidden_dim
+                base_irradiance.shape[0], self.pred_len, self.physics_hidden_dim
             )
         if self.physics_context_mode == 'baseline':
             return learned_context + base_context
@@ -554,9 +864,10 @@ class SolarPhysicsMixin:
     def _apply_physics(self, context, base_out, future_zenith):
         self._require_future_zenith(future_zenith)
         context = self._build_physics_context(context, base_out)
+        base_irradiance = select_physics_irradiance(base_out)
         dec_out, _ = self.physics_stack(
             context_seq=context,
-            base_state=base_out,
+            base_state=base_irradiance,
             cos_zenith=self._compute_cos_zenith(future_zenith),
         )
         return cache_solar_outputs(self, base_out, dec_out, future_zenith)

@@ -39,6 +39,8 @@ def print_args(args):
             if hasattr(args, 'solar_power_map'):
                 print(f'  {"Power Map:":<20}{args.solar_power_map:<20}{"Power Prior:":<20}{getattr(args, "solar_power_prior", "linear"):<20}')
                 print(f'  {"Map Hidden:":<20}{getattr(args, "solar_power_map_hidden", 16):<20}{"Map Dropout:":<20}{getattr(args, "solar_power_map_dropout", 0.0):<20}')
+                print(f'  {"Power Fusion:":<20}{getattr(args, "solar_power_fusion", "mapped"):<20}{"Direct Head:":<20}{getattr(args, "solar_power_direct_head", "linear"):<20}')
+                print(f'  {"Direct Hidden:":<20}{getattr(args, "solar_power_direct_hidden", 16):<20}{"Fusion Hidden:":<20}{getattr(args, "solar_power_fusion_hidden", 16):<20}')
                 print(f'  {"Gamma Pdc:":<20}{getattr(args, "solar_power_gamma_pdc", -0.004):<20}{"Temp Cell:":<20}{getattr(args, "solar_power_temp_cell_method", "noct"):<20}')
     if hasattr(args, 'is_three'):
         print(f'  {"Is Three:":<20}{args.is_three:<20}')

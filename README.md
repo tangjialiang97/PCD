@@ -133,10 +133,35 @@ bash scripts/solar/phy.sh
 
 **[`scripts/solar/README.md`](scripts/solar/README.md)**（GHI→功率集中映射方案）
 
+Minimal supervised power CSVs can use:
+
+```text
+dtime, ghi, dni, dhi, power
+```
+
+The solar data loader reorders value columns to `[ghi, dni, dhi, power]`.
+SolarPhysics projects only the first three irradiance columns into the feasible
+set, while the fourth column is used as the direct power channel when
+`enc_in=4`.
+
 Physics-aware models still forecast feasible `[ghi, dni, dhi]` first. When
 `--solar_power_output power` (or `append`) is set, projected GHI is mapped to
 power by a selectable head (`--solar_power_map`) on top of a selectable prior
-(`--solar_power_prior`):
+(`--solar_power_prior`). The mapped power can then be fused with a direct power
+forecast (`--solar_power_fusion`). With `enc_in=4`, the fourth channel is the
+direct power forecast; with `enc_in=3`, a fallback direct head is used.
+
+The final power head is:
+
+```text
+P_map    = SolarPowerMap(projected_ghi)
+P_direct = backbone_power_channel  # enc_in=4
+         = SolarDirectPowerHead([base_ghi,dni,dhi, projected_ghi,dni,dhi, cos_z])  # enc_in=3
+P_final  = SolarPowerFusion(P_map, P_direct)
+```
+
+With `--solar_power_output append`, the model output is supervised as
+`[ghi, dni, dhi, power]`; the `power` column is `P_final`.
 
 | map mode | meaning |
 |------|---------|
@@ -144,11 +169,20 @@ power by a selectable head (`--solar_power_map`) on top of a selectable prior
 | `affine` | learnable `softplus(a)*prior + b` |
 | `residual_mlp` | `prior + MLP([ghi_n, prior_n, cos_z])` (zero-init residual) |
 | `learned` | pure MLP map from `[ghi_n, cos_z]` (no prior add) |
+| `ghi_mlp` | strict GHI-only MLP from `[ghi_n]` to power |
 
 | prior | meaning |
 |------|---------|
 | `linear` | `P = capacity * clamp(GHI,0)/ghi_ref` |
 | `pvwatts` | differentiable PVWatts-DC: `P = capacity * (G/Gref) * (1 + gamma*(Tc-25))` with NOCT/Faiman `Tc` |
+
+| fusion mode | meaning |
+|------|---------|
+| `mapped` | return mapped GHI power only |
+| `direct` | return directly forecast power only |
+| `average` | average mapped and direct power |
+| `gated` | learn one scalar gate between mapped/direct power |
+| `learned` | learn a time-varying gate from `[mapped, direct, ghi_n, cos_z]` |
 
 ### A) Synthetic Congo power labels
 
@@ -198,19 +232,20 @@ temp_cell, cos_zenith, pdc0, [power_linear], ...
 
 - `power` = `observe_power` (supervision target)
 - `power_pvlib` = offline Faiman + `pvlib.pvsystem.pvwatts_dc`
-- `dni/dhi` = optional Erbs estimates so `enc_in=3` SolarPhysics still runs
+- `dni/dhi` = optional Erbs estimates so SolarPhysics can project `[ghi,dni,dhi]`
 
-Train with in-model PVWatts prior + residual map:
+Train with in-model PVWatts prior + residual map + learned fusion:
 
 ```bash
 python -u run.py \
   --task_name long_term_forecast --is_training 1 \
   --root_path ./data/solar/ --data_path Qingda_plant_power.csv \
   --model DLinearSolarPhysics --data Solar --features M \
-  --seq_len 256 --pred_len 24 --enc_in 3 --dec_in 3 --c_out 3 \
-  --solar_power_output power \
+  --seq_len 256 --pred_len 24 --enc_in 4 --dec_in 4 --c_out 4 \
+  --solar_power_output append \
   --solar_power_map residual_mlp \
   --solar_power_prior pvwatts \
+  --solar_power_fusion learned \
   --solar_power_gamma_pdc -0.004 \
   --solar_power_temp_cell_method noct
 ```

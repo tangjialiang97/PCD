@@ -44,8 +44,8 @@ class Model(nn.Module, SolarPhysicsMixin):
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
         self.enc_in = configs.enc_in
-        if self.enc_in != 3:
-            raise ValueError('PatchTSTSolarPhysics expects exactly 3 target channels: [ghi, dni, dhi].')
+        if self.enc_in not in (3, 4):
+            raise ValueError('PatchTSTSolarPhysics expects [ghi, dni, dhi] or [ghi, dni, dhi, power].')
         patch_len = int(getattr(configs, 'patch_len', patch_len))
         self._init_solar_physics(
             configs,

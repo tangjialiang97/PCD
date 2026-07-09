@@ -3,14 +3,18 @@ from torch import nn
 
 from layers.solar_physics import SolarPhysicsStack
 from models.DLinear import Model as DLinearBackbone
-from models._solar_physics_utils import cache_solar_outputs, init_solar_power_mapping
+from models._solar_physics_utils import (
+    cache_solar_outputs,
+    init_solar_power_mapping,
+    select_physics_irradiance,
+)
 
 
 class Model(DLinearBackbone):
     def __init__(self, configs):
         super(Model, self).__init__(configs, individual=getattr(configs, 'individual', False))
-        if configs.enc_in != 3:
-            raise ValueError('DLinearSolarPhysics expects exactly 3 target channels: [ghi, dni, dhi].')
+        if configs.enc_in not in (3, 4):
+            raise ValueError('DLinearSolarPhysics expects [ghi, dni, dhi] or [ghi, dni, dhi, power].')
         self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', configs.enc_in * 32))
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
@@ -51,7 +55,8 @@ class Model(DLinearBackbone):
         return torch.cos(torch.deg2rad(future_zenith)).clamp(min=0.0)
 
     def _build_physics_context(self, x_enc, base_out):
-        base_context = self.base_state_embed(base_out)
+        base_irradiance = select_physics_irradiance(base_out)
+        base_context = self.base_state_embed(base_irradiance)
         if self.physics_context_mode == 'base_only':
             return base_context
 
@@ -72,9 +77,10 @@ class Model(DLinearBackbone):
         base_out = super(Model, self).forecast(x_enc)
         context = self._build_physics_context(x_enc, base_out)
         cos_zenith = self._compute_cos_zenith(future_zenith)
+        base_irradiance = select_physics_irradiance(base_out)
         dec_out, _hidden = self.physics_stack(
             context_seq=context,
-            base_state=base_out,
+            base_state=base_irradiance,
             cos_zenith=cos_zenith,
         )
         return cache_solar_outputs(self, base_out, dec_out, future_zenith)

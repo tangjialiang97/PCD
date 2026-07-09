@@ -3,14 +3,18 @@ from torch import nn
 
 from layers.solar_physics import SolarPhysicsStack
 from models.TimesNet import Model as TimesNetBackbone
-from models._solar_physics_utils import cache_solar_outputs, init_solar_power_mapping
+from models._solar_physics_utils import (
+    cache_solar_outputs,
+    init_solar_power_mapping,
+    select_physics_irradiance,
+)
 
 
 class Model(TimesNetBackbone):
     def __init__(self, configs):
         super(Model, self).__init__(configs)
-        if configs.enc_in != 3:
-            raise ValueError('TimesNetSolarPhysics expects exactly 3 target channels: [ghi, dni, dhi].')
+        if configs.enc_in not in (3, 4):
+            raise ValueError('TimesNetSolarPhysics expects [ghi, dni, dhi] or [ghi, dni, dhi, power].')
         self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', configs.d_model))
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
@@ -50,11 +54,12 @@ class Model(TimesNetBackbone):
         base_out = base_out.add(means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
 
         context = self.context_head(enc_out[:, -self.pred_len:, :])
-        context = context + self.base_state_embed(base_out)
+        base_irradiance = select_physics_irradiance(base_out)
+        context = context + self.base_state_embed(base_irradiance)
         cos_zenith = self._compute_cos_zenith(future_zenith)
         dec_out, _hidden = self.physics_stack(
             context_seq=context,
-            base_state=base_out,
+            base_state=base_irradiance,
             cos_zenith=cos_zenith,
         )
         return cache_solar_outputs(self, base_out, dec_out, future_zenith)

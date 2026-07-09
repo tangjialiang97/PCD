@@ -23,6 +23,9 @@ DATASET_LAT_LON = {
 }
 
 
+SOLAR_PHYSICS_COLUMNS = ['ghi', 'dni', 'dhi']
+
+
 class Dataset(Dataset):
     def __init__(
         self,
@@ -84,7 +87,7 @@ class Dataset(Dataset):
         self.__build_window_meta__()
 
     def _compute_solar_zenith(self, ts_series: pd.Series) -> np.ndarray:
-        ts = pd.to_datetime(ts_series, errors='coerce')
+        ts = self._parse_timestamp(ts_series)
         if ts.isna().any():
             raise ValueError('Invalid timestamp found while computing solar zenith.')
 
@@ -101,23 +104,38 @@ class Dataset(Dataset):
         )
         return solpos['zenith'].to_numpy(dtype=np.float32).reshape(-1, 1)
 
+    @staticmethod
+    def _parse_timestamp(ts_series: pd.Series) -> pd.Series:
+        if pd.api.types.is_datetime64_any_dtype(ts_series):
+            return pd.to_datetime(ts_series, errors='coerce')
+        numeric = pd.to_numeric(ts_series, errors='coerce')
+        numeric_ratio = float(numeric.notna().mean()) if len(ts_series) else 0.0
+        if numeric_ratio > 0.8 and numeric.dropna().median() > 20000:
+            return pd.to_datetime(numeric, unit='D', origin='1899-12-30', errors='coerce')
+        return pd.to_datetime(ts_series, errors='coerce')
+
     def __read_data__(self):
         self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path_))
 
         if 'timestamp' in df_raw.columns:
-            df_raw['timestamp'] = pd.to_datetime(df_raw['timestamp'])
+            df_raw['timestamp'] = self._parse_timestamp(df_raw['timestamp'])
         elif 'timeStamp' in df_raw.columns:
-            df_raw['timestamp'] = pd.to_datetime(df_raw['timeStamp'])
+            df_raw['timestamp'] = self._parse_timestamp(df_raw['timeStamp'])
             df_raw = df_raw.drop(columns=['timeStamp'])
+        elif 'dtime' in df_raw.columns:
+            df_raw['timestamp'] = self._parse_timestamp(df_raw['dtime'])
+            df_raw = df_raw.drop(columns=['dtime'])
         elif 'datetime' in df_raw.columns:
-            df_raw['timestamp'] = pd.to_datetime(df_raw['datetime'])
+            df_raw['timestamp'] = self._parse_timestamp(df_raw['datetime'])
             df_raw = df_raw.drop(columns=['datetime'])
         else:
-            raise ValueError("Expected column 'timestamp', 'timeStamp', or 'datetime' in CSV")
+            raise ValueError("Expected column 'timestamp', 'timeStamp', 'dtime', or 'datetime' in CSV")
 
         if self.features in ['M', 'MS']:
             cols_data = [column for column in df_raw.columns if column != 'timestamp']
+            if self._should_use_solar_physics_order(cols_data):
+                cols_data = self._solar_physics_ordered_columns(cols_data)
             df_data = df_raw[cols_data]
         elif self.features == 'S':
             if self.target not in df_raw.columns:
@@ -131,16 +149,15 @@ class Dataset(Dataset):
             self.target_col_idx = self.data_columns.index(self.target)
 
         solar_power_output = str(getattr(self.args, 'solar_power_output', 'irradiance')).lower()
-        solar_metric_cols = ['ghi', 'dni', 'dhi']
         if solar_power_output == 'power' and 'power' in df_data.columns:
             self.ymax = float(df_data['power'].abs().max())
         elif solar_power_output == 'append' and all(
-            column in df_data.columns for column in solar_metric_cols + ['power']
+            column in df_data.columns for column in SOLAR_PHYSICS_COLUMNS + ['power']
         ):
-            self.ymax = df_data[solar_metric_cols + ['power']].abs().max().to_numpy(dtype=np.float32)
+            self.ymax = df_data[SOLAR_PHYSICS_COLUMNS + ['power']].abs().max().to_numpy(dtype=np.float32)
         elif bool(getattr(self.args, 'is_three', False)):
-            if all(column in df_data.columns for column in solar_metric_cols):
-                self.ymax = df_data[solar_metric_cols].abs().max().to_numpy(dtype=np.float32)
+            if all(column in df_data.columns for column in SOLAR_PHYSICS_COLUMNS):
+                self.ymax = df_data[SOLAR_PHYSICS_COLUMNS].abs().max().to_numpy(dtype=np.float32)
 
         n = len(df_raw)
         num_train = int(n * 0.7)
@@ -179,6 +196,33 @@ class Dataset(Dataset):
         self.timestamps = pd.to_datetime(split_df['timestamp']).to_numpy()
         self.data_stamp = build_stamp(split_df)
         self.data_zenith = self._compute_solar_zenith(split_df['timestamp'])
+
+    def _should_use_solar_physics_order(self, cols_data):
+        if not all(column in cols_data for column in SOLAR_PHYSICS_COLUMNS):
+            return False
+        return (
+            bool(getattr(self.args, 'use_internal_physics', False))
+            or str(getattr(self.args, 'model', '')).endswith('SolarPhysics')
+            or str(getattr(self.args, 'solar_power_output', 'irradiance')).lower() in {'power', 'append'}
+        )
+
+    def _solar_physics_ordered_columns(self, cols_data):
+        missing = [column for column in SOLAR_PHYSICS_COLUMNS if column not in cols_data]
+        if missing:
+            raise ValueError(
+                'SolarPhysics data requires columns {}, missing {}.'.format(
+                    SOLAR_PHYSICS_COLUMNS,
+                    missing,
+                )
+            )
+        ordered = list(SOLAR_PHYSICS_COLUMNS)
+        if 'power' in cols_data:
+            ordered.append('power')
+        ordered.extend(
+            column for column in cols_data
+            if column not in set(SOLAR_PHYSICS_COLUMNS + ['power'])
+        )
+        return ordered
 
     def __build_window_meta__(self):
         length = len(self.data_x)

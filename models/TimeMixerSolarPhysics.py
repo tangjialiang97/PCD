@@ -3,14 +3,18 @@ from torch import nn
 
 from layers.solar_physics import SolarPhysicsStack
 from models.TimeMixer import Model as TimeMixerBackbone
-from models._solar_physics_utils import cache_solar_outputs, init_solar_power_mapping
+from models._solar_physics_utils import (
+    cache_solar_outputs,
+    init_solar_power_mapping,
+    select_physics_irradiance,
+)
 
 
 class Model(TimeMixerBackbone):
     def __init__(self, configs):
         super(Model, self).__init__(configs)
-        if configs.enc_in != 3:
-            raise ValueError('TimeMixerSolarPhysics expects exactly 3 target channels: [ghi, dni, dhi].')
+        if configs.enc_in not in (3, 4):
+            raise ValueError('TimeMixerSolarPhysics expects [ghi, dni, dhi] or [ghi, dni, dhi, power].')
         self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', configs.d_model))
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
@@ -84,14 +88,16 @@ class Model(TimeMixerBackbone):
         base_out = self.normalize_layers[0](base_out, 'denorm')
         context = self.history_context(history.reshape(history.shape[0], -1))
         context = context.reshape(history.shape[0], self.pred_len, self.physics_hidden_dim)
-        context = context + self.base_state_embed(base_out[:, -self.pred_len:, :])
+        base_out = base_out[:, -self.pred_len:, :]
+        base_irradiance = select_physics_irradiance(base_out)
+        context = context + self.base_state_embed(base_irradiance)
         cos_zenith = self._compute_cos_zenith(future_zenith)
         dec_out, _hidden = self.physics_stack(
             context_seq=context,
-            base_state=base_out[:, -self.pred_len:, :],
+            base_state=base_irradiance,
             cos_zenith=cos_zenith,
         )
-        return cache_solar_outputs(self, base_out[:, -self.pred_len:, :], dec_out, future_zenith)
+        return cache_solar_outputs(self, base_out, dec_out, future_zenith)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None, future_zenith=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':

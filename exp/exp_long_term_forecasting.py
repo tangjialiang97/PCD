@@ -84,6 +84,12 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 for column in ['ghi', 'dni', 'dhi', 'power']
             ]
             return data_values[:, :, channel_indices]
+        if self._uses_solar_internal_physics():
+            channel_indices = [
+                self._data_column_index(data_set, column)
+                for column in ['ghi', 'dni', 'dhi']
+            ]
+            return data_values[:, :, channel_indices]
         return self._select_supervised_channels(self._select_main_channels(batch_tensor))
 
     def _metric_ymax(self, ymax, preds):

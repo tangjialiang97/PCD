@@ -277,8 +277,8 @@ if __name__ == '__main__':
     parser.add_argument('--solar_power_clip', type=str2bool, default=False,
                         help='clip normalized GHI to [0, 1] before mapping to generated energy')
     parser.add_argument('--solar_power_map', type=str, default='fixed',
-                        choices=['fixed', 'affine', 'residual_mlp', 'learned'],
-                        help='GHI-to-power map: closed-form prior, affine prior correction, residual MLP, or pure learned map')
+                        choices=['fixed', 'affine', 'residual_mlp', 'learned', 'ghi_mlp'],
+                        help='GHI-to-power map: prior, affine correction, residual MLP, learned map, or strict GHI-only MLP')
     parser.add_argument('--solar_power_prior', type=str, default='linear',
                         choices=['linear', 'pvwatts'],
                         help='physics prior inside SolarPowerMap: linear GHI capacity factor or differentiable PVWatts-DC')
@@ -286,6 +286,18 @@ if __name__ == '__main__':
                         help='hidden size for residual_mlp / learned solar power maps')
     parser.add_argument('--solar_power_map_dropout', type=float, default=0.0,
                         help='dropout used inside residual_mlp / learned solar power maps')
+    parser.add_argument('--solar_power_fusion', type=str, default='mapped',
+                        choices=['mapped', 'direct', 'average', 'gated', 'learned'],
+                        help='final power fusion: mapped GHI power, direct power, average, scalar gate, or learned dynamic gate')
+    parser.add_argument('--solar_power_direct_head', type=str, default='linear',
+                        choices=['linear', 'mlp'],
+                        help='fallback direct power head used when the backbone has no fourth power output')
+    parser.add_argument('--solar_power_direct_hidden', type=int, default=16,
+                        help='hidden size for the fallback direct power MLP head')
+    parser.add_argument('--solar_power_fusion_hidden', type=int, default=16,
+                        help='hidden size for learned solar power fusion gate')
+    parser.add_argument('--solar_power_fusion_gate_init', type=float, default=2.0,
+                        help='initial mapped-branch gate logit for gated/learned solar power fusion')
     parser.add_argument('--solar_power_gamma_pdc', type=float, default=-0.004,
                         help='PVWatts temperature coefficient gamma_pdc (1/C)')
     parser.add_argument('--solar_power_temp_ref', type=float, default=25.0,
@@ -458,6 +470,16 @@ if __name__ == '__main__':
             physics_parts.append('spmh{}'.format(args.solar_power_map_hidden))
         if float(getattr(args, 'solar_power_map_dropout', 0.0)) != 0.0:
             physics_parts.append('spmd{}'.format(args.solar_power_map_dropout))
+        if str(getattr(args, 'solar_power_fusion', 'mapped')) != 'mapped':
+            physics_parts.append('spf{}'.format(args.solar_power_fusion))
+        if str(getattr(args, 'solar_power_direct_head', 'linear')) != 'linear':
+            physics_parts.append('spdh{}'.format(args.solar_power_direct_head))
+        if int(getattr(args, 'solar_power_direct_hidden', 16)) != 16:
+            physics_parts.append('spdhid{}'.format(args.solar_power_direct_hidden))
+        if int(getattr(args, 'solar_power_fusion_hidden', 16)) != 16:
+            physics_parts.append('spfhid{}'.format(args.solar_power_fusion_hidden))
+        if float(getattr(args, 'solar_power_fusion_gate_init', 2.0)) != 2.0:
+            physics_parts.append('spfgi{}'.format(args.solar_power_fusion_gate_init))
         if float(getattr(args, 'solar_power_gamma_pdc', -0.004)) != -0.004:
             physics_parts.append('spg{}'.format(args.solar_power_gamma_pdc))
         if str(getattr(args, 'solar_power_temp_cell_method', 'noct')) != 'noct':
@@ -512,6 +534,11 @@ if __name__ == '__main__':
             'spp{}'.format(args.solar_power_prior),
             'spmh{}'.format(args.solar_power_map_hidden),
             'spmd{}'.format(args.solar_power_map_dropout),
+            'spf{}'.format(args.solar_power_fusion),
+            'spdh{}'.format(args.solar_power_direct_head),
+            'spdhid{}'.format(args.solar_power_direct_hidden),
+            'spfhid{}'.format(args.solar_power_fusion_hidden),
+            'spfgi{}'.format(args.solar_power_fusion_gate_init),
             'spg{}'.format(args.solar_power_gamma_pdc),
             'sptc{}'.format(args.solar_power_temp_cell_method),
         ]
