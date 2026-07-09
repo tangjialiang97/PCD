@@ -126,3 +126,31 @@ Run physics-aware solar experiments:
 ```bash
 bash scripts/solar/phy.sh
 ```
+
+## Solar generation power workflow
+
+Physics-aware models still forecast feasible `[ghi, dni, dhi]` first. When
+`--solar_power_output power` (or `append`) is set, projected GHI is mapped to
+power by a selectable head (`--solar_power_map`):
+
+| mode | meaning |
+|------|---------|
+| `fixed` | closed-form prior `P = clamp(GHI,0)/ghi_ref * capacity` |
+| `affine` | learnable `softplus(a)*prior + b` |
+| `residual_mlp` | `prior + MLP([ghi_n, prior, cos_z])` (zero-init residual) |
+| `learned` | pure MLP map from `[ghi_n, cos_z]` (no prior add) |
+
+Build a Congo example CSV with nonlinear synthetic power labels:
+
+```bash
+python scripts/solar/build_power_dataset.py \
+  --input data/solar/Congo.csv \
+  --output data/solar/Congo_power.csv \
+  --label-mode nonlinear
+```
+
+Run power forecasting experiments:
+
+```bash
+bash scripts/solar/power.sh
+```

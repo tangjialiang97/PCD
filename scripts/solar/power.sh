@@ -13,6 +13,12 @@ models=(
   mixlinearSolarPhysics
 )
 
+# GHI->power map modes. Default residual_mlp learns a correction on top of the
+# linear prior; fixed is the closed-form baseline.
+map_modes=(
+  residual_mlp
+)
+
 if [ "$debug_mode" = "True" ]; then
   pred_lens=(12)
 else
@@ -26,6 +32,7 @@ failure_count=0
 
 for data_path in "${data_paths[@]}"; do
 for model_name in "${models[@]}"; do
+for map_mode in "${map_modes[@]}"; do
 for pred_len in "${pred_lens[@]}"; do
 
   if [ "$model_name" = "Autoformer" ] || [ "$model_name" = "Nonstationary_Transformer" ] || [ "$model_name" = "Informer" ] || [ "$model_name" = "FEDformer" ]; then
@@ -36,7 +43,7 @@ for pred_len in "${pred_lens[@]}"; do
     batch_size=512
   fi
 
-  echo "[RUN] model=${model_name} data=${data_path} pred_len=${pred_len} ll=${label_len} bs=${batch_size}" | tee -a "$log_file"
+  echo "[RUN] model=${model_name} data=${data_path} map=${map_mode} pred_len=${pred_len} ll=${label_len} bs=${batch_size}" | tee -a "$log_file"
 
   if ! python -u run.py \
     --task_name long_term_forecast \
@@ -63,14 +70,18 @@ for pred_len in "${pred_lens[@]}"; do
     --d_ff 128 \
     --itr 1 \
     --solar_power_output power \
+    --solar_power_map "$map_mode" \
+    --solar_power_map_hidden 16 \
+    --solar_power_map_dropout 0.0 \
     --solar_power_capacity 1.0 \
     --solar_power_ghi_ref 1000.0 \
     --solar_power_clip False \
     --gpu "$gpu_id" 2>&1 | tee -a "$log_file"; then
     failure_count=$((failure_count + 1))
-    echo "[ERROR] model=${model_name} data=${data_path} pred_len=${pred_len} failed, continue to next run" | tee -a "$log_file"
+    echo "[ERROR] model=${model_name} data=${data_path} map=${map_mode} pred_len=${pred_len} failed, continue to next run" | tee -a "$log_file"
   fi
 
+done
 done
 done
 done

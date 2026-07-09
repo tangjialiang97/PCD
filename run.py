@@ -276,6 +276,13 @@ if __name__ == '__main__':
                         help='reference irradiation used to convert GHI into equivalent full-power hours')
     parser.add_argument('--solar_power_clip', type=str2bool, default=False,
                         help='clip normalized GHI to [0, 1] before mapping to generated energy')
+    parser.add_argument('--solar_power_map', type=str, default='fixed',
+                        choices=['fixed', 'affine', 'residual_mlp', 'learned'],
+                        help='GHI-to-power map: closed-form prior, affine prior correction, residual MLP, or pure learned map')
+    parser.add_argument('--solar_power_map_hidden', type=int, default=16,
+                        help='hidden size for residual_mlp / learned solar power maps')
+    parser.add_argument('--solar_power_map_dropout', type=float, default=0.0,
+                        help='dropout used inside residual_mlp / learned solar power maps')
     parser.add_argument('--wind_cap_quantile', type=float, default=0.995,
                         help='training-set quantile used to estimate wind power capacity upper bound')
     parser.add_argument('--wind_ramp_quantile', type=float, default=0.995,
@@ -423,6 +430,12 @@ if __name__ == '__main__':
             physics_parts.append('spgr{}'.format(args.solar_power_ghi_ref))
         if bool(getattr(args, 'solar_power_clip', False)):
             physics_parts.append('spclip1')
+        if str(getattr(args, 'solar_power_map', 'fixed')) != 'fixed':
+            physics_parts.append('spm{}'.format(args.solar_power_map))
+        if int(getattr(args, 'solar_power_map_hidden', 16)) != 16:
+            physics_parts.append('spmh{}'.format(args.solar_power_map_hidden))
+        if float(getattr(args, 'solar_power_map_dropout', 0.0)) != 0.0:
+            physics_parts.append('spmd{}'.format(args.solar_power_map_dropout))
         if 'WindPhysics' in args.model and float(getattr(args, 'wind_cap_quantile', 0.995)) != 0.995:
             physics_parts.append('wcq{}'.format(args.wind_cap_quantile))
         if ('WindPhysicsV2' in args.model or 'WindPhysicsV3' in args.model) and float(getattr(args, 'wind_ramp_quantile', 0.995)) != 0.995:
@@ -469,6 +482,9 @@ if __name__ == '__main__':
             'spc{}'.format(args.solar_power_capacity),
             'spgr{}'.format(args.solar_power_ghi_ref),
             'spclip{}'.format(args.solar_power_clip),
+            'spm{}'.format(args.solar_power_map),
+            'spmh{}'.format(args.solar_power_map_hidden),
+            'spmd{}'.format(args.solar_power_map_dropout),
         ]
         hidden_tag = build_hidden_config_hash(hidden_parts)
         raw_setting = '_'.join(str(part) for part in setting_parts + physics_parts + [hidden_tag] if str(part))

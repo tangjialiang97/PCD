@@ -36,6 +36,9 @@ def print_args(args):
         if hasattr(args, 'solar_power_output'):
             print(f'  {"Power Output:":<20}{args.solar_power_output:<20}{"Power Cap:":<20}{args.solar_power_capacity:<20}')
             print(f'  {"Power GHI Ref:":<20}{args.solar_power_ghi_ref:<20}{"Power Clip:":<20}{args.solar_power_clip:<20}')
+            if hasattr(args, 'solar_power_map'):
+                print(f'  {"Power Map:":<20}{args.solar_power_map:<20}{"Map Hidden:":<20}{getattr(args, "solar_power_map_hidden", 16):<20}')
+                print(f'  {"Map Dropout:":<20}{getattr(args, "solar_power_map_dropout", 0.0):<20}')
     if hasattr(args, 'is_three'):
         print(f'  {"Is Three:":<20}{args.is_three:<20}')
     print()

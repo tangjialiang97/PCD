@@ -3,7 +3,7 @@ from torch import nn
 
 from layers.solar_physics_3 import SolarPhysicsStack
 from models.DLinear import Model as DLinearBackbone
-from models._solar_physics_utils import cache_solar_outputs
+from models._solar_physics_utils import cache_solar_outputs, init_solar_power_mapping
 
 
 class Model(DLinearBackbone):
@@ -14,6 +14,7 @@ class Model(DLinearBackbone):
         self.physics_hidden_dim = int(getattr(configs, 'physics_hidden_dim', configs.enc_in * 32))
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
+        init_solar_power_mapping(self, configs)
         self.history_context = nn.Linear(configs.seq_len * configs.enc_in, self.pred_len * self.physics_hidden_dim)
         self.base_state_embed = nn.Linear(3, self.physics_hidden_dim)
         self.physics_stack = SolarPhysicsStack(
