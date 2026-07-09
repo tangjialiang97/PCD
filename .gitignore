@@ -201,3 +201,6 @@ Thumbs.db
 
 .conda/
 .vscode/
+
+# Editable VCS dependencies installed by pip from requirements.txt
+/src/

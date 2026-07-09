@@ -59,8 +59,13 @@ class Dataset(Dataset):
 
         self.root_path = root_path
         self.data_path_ = data_path
-        if self.data_path_ in DATASET_LAT_LON:
-            lat, lon = DATASET_LAT_LON[self.data_path_]
+        dataset_location_key = self.data_path_
+        if dataset_location_key not in DATASET_LAT_LON:
+            stem, ext = os.path.splitext(dataset_location_key)
+            if stem.endswith('_power'):
+                dataset_location_key = '{}{}'.format(stem[:-len('_power')], ext)
+        if dataset_location_key in DATASET_LAT_LON:
+            lat, lon = DATASET_LAT_LON[dataset_location_key]
             self.solar_latitude = float(lat)
             self.solar_longitude = float(lon)
         else:
@@ -118,8 +123,15 @@ class Dataset(Dataset):
         if self.target in self.data_columns:
             self.target_col_idx = self.data_columns.index(self.target)
 
-        if bool(getattr(self.args, 'is_three', False)):
-            solar_metric_cols = ['ghi', 'dni', 'dhi']
+        solar_power_output = str(getattr(self.args, 'solar_power_output', 'irradiance')).lower()
+        solar_metric_cols = ['ghi', 'dni', 'dhi']
+        if solar_power_output == 'power' and 'power' in df_data.columns:
+            self.ymax = float(df_data['power'].abs().max())
+        elif solar_power_output == 'append' and all(
+            column in df_data.columns for column in solar_metric_cols + ['power']
+        ):
+            self.ymax = df_data[solar_metric_cols + ['power']].abs().max().to_numpy(dtype=np.float32)
+        elif bool(getattr(self.args, 'is_three', False)):
             if all(column in df_data.columns for column in solar_metric_cols):
                 self.ymax = df_data[solar_metric_cols].abs().max().to_numpy(dtype=np.float32)
 

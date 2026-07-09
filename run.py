@@ -267,6 +267,15 @@ if __name__ == '__main__':
                         help='enable gated feedback for SolarPhysicsBlock temporal updates')
     parser.add_argument('--physics_dual_branch', action='store_true', default=False,
                         help='enable dual hidden/state branch update inside SolarPhysicsBlock')
+    parser.add_argument('--solar_power_output', type=str, default='irradiance',
+                        choices=['irradiance', 'power', 'append'],
+                        help='SolarPhysics output: original irradiance channels, mapped power only, or irradiance plus power')
+    parser.add_argument('--solar_power_capacity', type=float, default=1.0,
+                        help='installed/rated capacity used by the GHI-to-generation mapping')
+    parser.add_argument('--solar_power_ghi_ref', type=float, default=1000.0,
+                        help='reference irradiation used to convert GHI into equivalent full-power hours')
+    parser.add_argument('--solar_power_clip', type=str2bool, default=False,
+                        help='clip normalized GHI to [0, 1] before mapping to generated energy')
     parser.add_argument('--wind_cap_quantile', type=float, default=0.995,
                         help='training-set quantile used to estimate wind power capacity upper bound')
     parser.add_argument('--wind_ramp_quantile', type=float, default=0.995,
@@ -339,6 +348,8 @@ if __name__ == '__main__':
 
     if args.model.endswith('SolarPhysics'):
         args.use_internal_physics = True
+    if args.solar_power_output == 'power':
+        args.target = 'power'
 
     args.dataset_tag = build_dataset_tag(args)
 
@@ -404,6 +415,14 @@ if __name__ == '__main__':
             physics_parts.append('pgf1')
         if bool(getattr(args, 'physics_dual_branch', False)):
             physics_parts.append('pdb1')
+        if str(getattr(args, 'solar_power_output', 'irradiance')) != 'irradiance':
+            physics_parts.append('spo{}'.format(args.solar_power_output))
+        if float(getattr(args, 'solar_power_capacity', 1.0)) != 1.0:
+            physics_parts.append('spc{}'.format(args.solar_power_capacity))
+        if float(getattr(args, 'solar_power_ghi_ref', 1000.0)) != 1000.0:
+            physics_parts.append('spgr{}'.format(args.solar_power_ghi_ref))
+        if bool(getattr(args, 'solar_power_clip', False)):
+            physics_parts.append('spclip1')
         if 'WindPhysics' in args.model and float(getattr(args, 'wind_cap_quantile', 0.995)) != 0.995:
             physics_parts.append('wcq{}'.format(args.wind_cap_quantile))
         if ('WindPhysicsV2' in args.model or 'WindPhysicsV3' in args.model) and float(getattr(args, 'wind_ramp_quantile', 0.995)) != 0.995:
@@ -446,6 +465,10 @@ if __name__ == '__main__':
             'ip{}'.format(args.use_internal_physics),
             'phl{}'.format(args.physics_layers),
             'phd{}'.format(args.physics_hidden_dim),
+            'spo{}'.format(args.solar_power_output),
+            'spc{}'.format(args.solar_power_capacity),
+            'spgr{}'.format(args.solar_power_ghi_ref),
+            'spclip{}'.format(args.solar_power_clip),
         ]
         hidden_tag = build_hidden_config_hash(hidden_parts)
         raw_setting = '_'.join(str(part) for part in setting_parts + physics_parts + [hidden_tag] if str(part))

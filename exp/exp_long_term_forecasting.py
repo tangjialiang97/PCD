@@ -46,6 +46,55 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         f_dim = -1 if self.args.features == 'MS' else 0
         return batch_tensor[:, :, f_dim:]
 
+    def _solar_power_output_mode(self):
+        return str(getattr(self.args, 'solar_power_output', 'irradiance')).lower()
+
+    def _data_value_channels(self, batch_tensor, data_set):
+        data_width = len(getattr(data_set, 'data_columns', []))
+        if data_width <= 0:
+            data_width = batch_tensor.shape[-1] - 1
+        return batch_tensor[:, :, :data_width]
+
+    def _data_column_index(self, data_set, column):
+        data_columns = list(getattr(data_set, 'data_columns', []))
+        if column not in data_columns:
+            raise ValueError(
+                "Column '{}' is required for solar_power_output='{}', but CSV columns are {}.".format(
+                    column,
+                    self._solar_power_output_mode(),
+                    data_columns,
+                )
+            )
+        return data_columns.index(column)
+
+    def _select_prediction_channels(self, outputs):
+        if self._solar_power_output_mode() in {'power', 'append'}:
+            return outputs
+        return self._select_supervised_channels(outputs)
+
+    def _select_target_channels(self, batch_tensor, data_set):
+        output_mode = self._solar_power_output_mode()
+        data_values = self._data_value_channels(batch_tensor, data_set)
+        if output_mode == 'power':
+            power_idx = self._data_column_index(data_set, 'power')
+            return data_values[:, :, power_idx:power_idx + 1]
+        if output_mode == 'append':
+            channel_indices = [
+                self._data_column_index(data_set, column)
+                for column in ['ghi', 'dni', 'dhi', 'power']
+            ]
+            return data_values[:, :, channel_indices]
+        return self._select_supervised_channels(self._select_main_channels(batch_tensor))
+
+    def _metric_ymax(self, ymax, preds):
+        if isinstance(ymax, (list, tuple, np.ndarray)):
+            ymax_arr = np.asarray(ymax, dtype=np.float32)
+            if ymax_arr.ndim == 1 and preds.shape[-1] == ymax_arr.shape[0]:
+                return ymax_arr
+            if ymax_arr.ndim == 1 and ymax_arr.shape[0] > 0:
+                return ymax_arr[0]
+        return ymax
+
     def _forward_model(self, batch_x_main, batch_x_mark, dec_inp, batch_y_mark, batch_y, data_set):
         if self._uses_solar_internal_physics():
             future_zenith = self._extract_future_zenith(batch_y).to(batch_x_main.device)
@@ -126,9 +175,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                         )
                 else:
                     outputs = self._forward_model(batch_x_main, batch_x_mark, dec_inp, batch_y_mark, batch_y, vali_data)
-                outputs = self._select_supervised_channels(outputs[:, -self.args.pred_len:, :])
-                batch_y_main_pred = self._select_supervised_channels(
-                    batch_y_main[:, -self.args.pred_len:, :].to(self.device)
+                outputs = self._select_prediction_channels(outputs[:, -self.args.pred_len:, :])
+                batch_y_main_pred = self._select_target_channels(
+                    batch_y[:, -self.args.pred_len:, :].to(self.device),
+                    vali_data,
                 )
 
                 pred = outputs.detach()
@@ -188,10 +238,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 # encoder - decoder
                 outputs = self._forward_model(batch_x_main, batch_x_mark, dec_inp, batch_y_mark, batch_y, train_data)
-                outputs = self._select_supervised_channels(outputs[:, -self.args.pred_len:, :])
-
-                batch_y_main_pred = self._select_supervised_channels(
-                    batch_y_main[:, -self.args.pred_len:, :].to(self.device)
+                outputs = self._select_prediction_channels(outputs[:, -self.args.pred_len:, :])
+                batch_y_main_pred = self._select_target_channels(
+                    batch_y[:, -self.args.pred_len:, :].to(self.device),
+                    train_data,
                 )
                 loss = criterion(outputs, batch_y_main_pred)
 
@@ -263,7 +313,10 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                 # encoder - decoder
                 outputs = self._forward_model(batch_x_main, batch_x_mark, dec_inp, batch_y_mark, batch_y, test_data)
                 outputs = outputs[:, -self.args.pred_len:, :]
-                batch_y_main_pred = batch_y_main[:, -self.args.pred_len:, :].to(self.device)
+                batch_y_main_pred = self._select_target_channels(
+                    batch_y[:, -self.args.pred_len:, :].to(self.device),
+                    test_data,
+                )
                 outputs = outputs.detach().cpu().numpy()
                 batch_y_main_pred = batch_y_main_pred.detach().cpu().numpy()
                 if test_data.scale and self.args.inverse:
@@ -273,8 +326,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
                     outputs = test_data.inverse_transform(outputs.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     batch_y_main_pred = test_data.inverse_transform(batch_y_main_pred.reshape(shape[0] * shape[1], -1)).reshape(shape)
 
-                outputs = self._select_supervised_channels(outputs)
-                batch_y_main_pred = self._select_supervised_channels(batch_y_main_pred)
+                outputs = self._select_prediction_channels(outputs)
 
                 pred = outputs
                 true = batch_y_main_pred
@@ -289,7 +341,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
 
         is_three = bool(getattr(self.args, 'is_three', False))
-        if not is_three:
+        if self._solar_power_output_mode() == 'irradiance' and not is_three:
             preds = preds[:, :, 0:1]
             trues = trues[:, :, 0:1]
         print('test shape:', preds.shape, trues.shape)
@@ -317,8 +369,8 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         f.write(setting + "  \n")
 
      
-        ghi_ymax = ymax[0] if isinstance(ymax, (list, tuple, np.ndarray)) else ymax
-        mae, mse, nrmse, nmae = metric(preds, trues, ghi_ymax)
+        metric_ymax = self._metric_ymax(ymax, preds)
+        mae, mse, nrmse, nmae = metric(preds, trues, metric_ymax)
         print('mse:{}, mae:{}, nrmse:{}, nmae:{}'.format(mse, mae, nrmse, nmae))
         f.write('mse:{}, mae:{}, nrmse:{}, nmae:{}'.format(mse, mae, nrmse, nmae))
 

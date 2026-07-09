@@ -33,6 +33,9 @@ def print_args(args):
             print(f'  {"Context Mode:":<20}{args.physics_context_mode:<20}{"Ctx Gate Init:":<20}{getattr(args, "physics_context_gate_init", "n/a"):<20}')
         if hasattr(args, 'physics_gated_feedback'):
             print(f'  {"Gated Feedback:":<20}{args.physics_gated_feedback:<20}{"Phys Kernel:":<20}{args.physics_kernel_size:<20}')
+        if hasattr(args, 'solar_power_output'):
+            print(f'  {"Power Output:":<20}{args.solar_power_output:<20}{"Power Cap:":<20}{args.solar_power_capacity:<20}')
+            print(f'  {"Power GHI Ref:":<20}{args.solar_power_ghi_ref:<20}{"Power Clip:":<20}{args.solar_power_clip:<20}')
     if hasattr(args, 'is_three'):
         print(f'  {"Is Three:":<20}{args.is_three:<20}')
     print()

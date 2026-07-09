@@ -3,7 +3,7 @@ from torch import nn
 
 from layers.solar_physics import SolarPhysicsStack
 from models.DLinear import Model as DLinearBackbone
-from models._solar_physics_utils import cache_solar_outputs
+from models._solar_physics_utils import cache_solar_outputs, init_solar_power_mapping
 
 
 class Model(DLinearBackbone):
@@ -15,6 +15,7 @@ class Model(DLinearBackbone):
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
         self.physics_context_mode = str(getattr(configs, 'physics_context_mode', 'baseline')).lower()
+        init_solar_power_mapping(self, configs)
         valid_context_modes = {'baseline', 'base_only', 'gated'}
         if self.physics_context_mode not in valid_context_modes:
             raise ValueError(

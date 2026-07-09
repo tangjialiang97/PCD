@@ -10,12 +10,63 @@ def _cached_tensor(value):
     return value
 
 
+def ghi_to_power(ghi, capacity=1.0, ghi_ref=1000.0, clip=False):
+    if ghi_ref <= 0:
+        raise ValueError('solar_power_ghi_ref must be positive.')
+
+    normalized_ghi = torch.clamp(ghi, min=0.0) / float(ghi_ref)
+    if clip:
+        normalized_ghi = torch.clamp(normalized_ghi, max=1.0)
+    return normalized_ghi * float(capacity)
+
+
+def init_solar_power_mapping(model, configs):
+    output_mode = str(getattr(configs, 'solar_power_output', 'irradiance')).lower()
+    valid_output_modes = {'irradiance', 'power', 'append'}
+    if output_mode not in valid_output_modes:
+        raise ValueError(
+            'solar_power_output must be one of {}, got {!r}.'.format(
+                sorted(valid_output_modes),
+                output_mode,
+            )
+    )
+
+    model.solar_power_output = output_mode
+    model.solar_power_capacity = float(getattr(configs, 'solar_power_capacity', 1.0))
+    model.solar_power_ghi_ref = float(getattr(configs, 'solar_power_ghi_ref', 1000.0))
+    model.solar_power_clip = bool(getattr(configs, 'solar_power_clip', False))
+
+    if model.solar_power_capacity < 0:
+        raise ValueError('solar_power_capacity must be non-negative.')
+    if model.solar_power_ghi_ref <= 0:
+        raise ValueError('solar_power_ghi_ref must be positive.')
+
+
+def map_projected_ghi_to_power(model, projected_out):
+    ghi = projected_out[..., 0:1]
+    return ghi_to_power(
+        ghi,
+        capacity=getattr(model, 'solar_power_capacity', 1.0),
+        ghi_ref=getattr(model, 'solar_power_ghi_ref', 1000.0),
+        clip=getattr(model, 'solar_power_clip', False),
+    )
+
+
 def cache_solar_outputs(model, base_out, projected_out, future_zenith):
     model.latest_base_out = _cached_tensor(base_out)
     model.latest_projected_out = _cached_tensor(projected_out)
     model.latest_cos_zenith = _cached_tensor(torch.cos(torch.deg2rad(future_zenith)).clamp(min=0.0))
     physics_stack = getattr(model, 'physics_stack', None)
     model.latest_projection_trace = getattr(physics_stack, 'latest_trace', None)
+
+    power_out = map_projected_ghi_to_power(model, projected_out)
+    model.latest_power_out = _cached_tensor(power_out)
+
+    output_mode = getattr(model, 'solar_power_output', 'irradiance')
+    if output_mode == 'power':
+        return power_out
+    if output_mode == 'append':
+        return torch.cat([projected_out, power_out], dim=-1)
     return projected_out
 
 
@@ -31,6 +82,7 @@ class SolarPhysicsMixin:
         self.night_cos_threshold = float(getattr(configs, 'night_cos_threshold', 0.0))
         self.physics_eps = float(getattr(configs, 'physics_eps', 1e-4))
         self.physics_context_mode = str(getattr(configs, 'physics_context_mode', 'baseline')).lower()
+        init_solar_power_mapping(self, configs)
         valid_context_modes = {'baseline', 'base_only', 'gated'}
         if self.physics_context_mode not in valid_context_modes:
             raise ValueError(

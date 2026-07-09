@@ -42,11 +42,12 @@ def data_provider(args, flag):
         flag=flag,
         features=args.features,
         data_path=args.data_path,
+        target=args.target,
         sample_interval=sample_interval,
         slide_step=args.slide_step,
         scale=False,
         timeenc=0,
-        ymax=ymax_dict[args.data_path]
+        ymax=ymax_dict.get(args.data_path, 29.5)
     )
     data_loader = DataLoader(
         dataset=data_set,

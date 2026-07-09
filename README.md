@@ -29,9 +29,29 @@ This repository contains the training, evaluation, data loading, and experiment 
 We recommend using a fresh Python environment.
 
 ```bash
-conda create -n pcd python=3.10
+conda create -n pcd python=3.11
 conda activate pcd
-pip install -r requirements.txt
+
+mkdir -p src
+if [ ! -d src/timesfm/.git ]; then
+  git -c filter.lfs.required=false \
+      -c filter.lfs.clean=cat \
+      -c filter.lfs.smudge=cat \
+      -c filter.lfs.process= \
+      clone --filter=blob:none https://github.com/google-research/timesfm.git src/timesfm
+fi
+git -c filter.lfs.required=false \
+    -c filter.lfs.clean=cat \
+    -c filter.lfs.smudge=cat \
+    -c filter.lfs.process= \
+    -C src/timesfm fetch origin bf88c5dc88f6275b7071ebcd9051406c11435c0c
+git -c filter.lfs.required=false \
+    -c filter.lfs.clean=cat \
+    -c filter.lfs.smudge=cat \
+    -c filter.lfs.process= \
+    -C src/timesfm checkout -f bf88c5dc88f6275b7071ebcd9051406c11435c0c
+
+pip install --no-deps -r requirements.txt
 ```
 
 ## Data
