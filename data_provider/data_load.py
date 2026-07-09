@@ -16,6 +16,10 @@ DATASET_LAT_LON = {
     'Congo.csv': (2.61924, 19.85019),
     'Germany.csv': (50.0, 10.0),
     'NewDelhi.csv': (28.0, 77.0),
+    # Plant sites from dataset_expample (lon, lat documented as 100.641, 29.919)
+    'Qingda_plant_power.csv': (29.919, 100.641),
+    'Jiefang_plant_power.csv': (29.919, 100.641),
+    'plant_power.csv': (29.919, 100.641),
 }
 
 
@@ -62,8 +66,11 @@ class Dataset(Dataset):
         dataset_location_key = self.data_path_
         if dataset_location_key not in DATASET_LAT_LON:
             stem, ext = os.path.splitext(dataset_location_key)
-            if stem.endswith('_power'):
-                dataset_location_key = '{}{}'.format(stem[:-len('_power')], ext)
+            # Strip common suffixes used by power / plant-power exports.
+            for suffix in ('_plant_power', '_power'):
+                if stem.endswith(suffix):
+                    dataset_location_key = '{}{}'.format(stem[:-len(suffix)], ext)
+                    break
         if dataset_location_key in DATASET_LAT_LON:
             lat, lon = DATASET_LAT_LON[dataset_location_key]
             self.solar_latitude = float(lat)

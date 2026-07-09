@@ -279,10 +279,30 @@ if __name__ == '__main__':
     parser.add_argument('--solar_power_map', type=str, default='fixed',
                         choices=['fixed', 'affine', 'residual_mlp', 'learned'],
                         help='GHI-to-power map: closed-form prior, affine prior correction, residual MLP, or pure learned map')
+    parser.add_argument('--solar_power_prior', type=str, default='linear',
+                        choices=['linear', 'pvwatts'],
+                        help='physics prior inside SolarPowerMap: linear GHI capacity factor or differentiable PVWatts-DC')
     parser.add_argument('--solar_power_map_hidden', type=int, default=16,
                         help='hidden size for residual_mlp / learned solar power maps')
     parser.add_argument('--solar_power_map_dropout', type=float, default=0.0,
                         help='dropout used inside residual_mlp / learned solar power maps')
+    parser.add_argument('--solar_power_gamma_pdc', type=float, default=-0.004,
+                        help='PVWatts temperature coefficient gamma_pdc (1/C)')
+    parser.add_argument('--solar_power_temp_ref', type=float, default=25.0,
+                        help='PVWatts reference cell temperature (C)')
+    parser.add_argument('--solar_power_temp_amb', type=float, default=20.0,
+                        help='fallback ambient temperature for PVWatts prior when temp_air is unavailable')
+    parser.add_argument('--solar_power_noct', type=float, default=45.0,
+                        help='NOCT used by the default cell-temperature model inside PVWatts prior')
+    parser.add_argument('--solar_power_temp_cell_method', type=str, default='noct',
+                        choices=['noct', 'faiman'],
+                        help='cell temperature model used by PVWatts prior (NOCT or Faiman)')
+    parser.add_argument('--solar_power_faiman_u0', type=float, default=25.0,
+                        help='Faiman u0 coefficient for PVWatts prior')
+    parser.add_argument('--solar_power_faiman_u1', type=float, default=6.84,
+                        help='Faiman u1 coefficient for PVWatts prior')
+    parser.add_argument('--solar_power_wind_default', type=float, default=1.0,
+                        help='fallback wind speed (m/s) for Faiman cell temperature')
     parser.add_argument('--wind_cap_quantile', type=float, default=0.995,
                         help='training-set quantile used to estimate wind power capacity upper bound')
     parser.add_argument('--wind_ramp_quantile', type=float, default=0.995,
@@ -432,10 +452,16 @@ if __name__ == '__main__':
             physics_parts.append('spclip1')
         if str(getattr(args, 'solar_power_map', 'fixed')) != 'fixed':
             physics_parts.append('spm{}'.format(args.solar_power_map))
+        if str(getattr(args, 'solar_power_prior', 'linear')) != 'linear':
+            physics_parts.append('spp{}'.format(args.solar_power_prior))
         if int(getattr(args, 'solar_power_map_hidden', 16)) != 16:
             physics_parts.append('spmh{}'.format(args.solar_power_map_hidden))
         if float(getattr(args, 'solar_power_map_dropout', 0.0)) != 0.0:
             physics_parts.append('spmd{}'.format(args.solar_power_map_dropout))
+        if float(getattr(args, 'solar_power_gamma_pdc', -0.004)) != -0.004:
+            physics_parts.append('spg{}'.format(args.solar_power_gamma_pdc))
+        if str(getattr(args, 'solar_power_temp_cell_method', 'noct')) != 'noct':
+            physics_parts.append('sptc{}'.format(args.solar_power_temp_cell_method))
         if 'WindPhysics' in args.model and float(getattr(args, 'wind_cap_quantile', 0.995)) != 0.995:
             physics_parts.append('wcq{}'.format(args.wind_cap_quantile))
         if ('WindPhysicsV2' in args.model or 'WindPhysicsV3' in args.model) and float(getattr(args, 'wind_ramp_quantile', 0.995)) != 0.995:
@@ -483,8 +509,11 @@ if __name__ == '__main__':
             'spgr{}'.format(args.solar_power_ghi_ref),
             'spclip{}'.format(args.solar_power_clip),
             'spm{}'.format(args.solar_power_map),
+            'spp{}'.format(args.solar_power_prior),
             'spmh{}'.format(args.solar_power_map_hidden),
             'spmd{}'.format(args.solar_power_map_dropout),
+            'spg{}'.format(args.solar_power_gamma_pdc),
+            'sptc{}'.format(args.solar_power_temp_cell_method),
         ]
         hidden_tag = build_hidden_config_hash(hidden_parts)
         raw_setting = '_'.join(str(part) for part in setting_parts + physics_parts + [hidden_tag] if str(part))

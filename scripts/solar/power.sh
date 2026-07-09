@@ -13,11 +13,12 @@ models=(
   mixlinearSolarPhysics
 )
 
-# GHI->power map modes. Default residual_mlp learns a correction on top of the
-# linear prior; fixed is the closed-form baseline.
+# GHI->power map modes. residual_mlp learns a correction on top of the prior.
+# Pair with --solar_power_prior {linear,pvwatts}.
 map_modes=(
   residual_mlp
 )
+prior_mode="${prior_mode:-linear}"
 
 if [ "$debug_mode" = "True" ]; then
   pred_lens=(12)
@@ -71,6 +72,7 @@ for pred_len in "${pred_lens[@]}"; do
     --itr 1 \
     --solar_power_output power \
     --solar_power_map "$map_mode" \
+    --solar_power_prior "$prior_mode" \
     --solar_power_map_hidden 16 \
     --solar_power_map_dropout 0.0 \
     --solar_power_capacity 1.0 \

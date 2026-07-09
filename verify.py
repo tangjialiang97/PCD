@@ -11,6 +11,9 @@ DATASET_LAT_LON = {
     'Congo.csv': (2.61924, 19.85019),
     'Germany.csv': (50.0, 10.0),
     'NewDelhi.csv': (28.0, 77.0),
+    'Qingda_plant_power.csv': (29.919, 100.641),
+    'Jiefang_plant_power.csv': (29.919, 100.641),
+    'plant_power.csv': (29.919, 100.641),
 }
 
 
@@ -25,11 +28,13 @@ def resolve_location(csv_path, latitude, longitude):
     file_name = os.path.basename(csv_path)
     location_key = file_name
     stem, ext = os.path.splitext(location_key)
-    if stem.endswith('_power'):
-        location_key = '{}{}'.format(stem[:-len('_power')], ext)
+    for suffix in ('_plant_power', '_power'):
+        if stem.endswith(suffix):
+            location_key = '{}{}'.format(stem[:-len(suffix)], ext)
+            break
 
-    if location_key in DATASET_LAT_LON:
-        return DATASET_LAT_LON[location_key]
+    if location_key in DATASET_LAT_LON or file_name in DATASET_LAT_LON:
+        return DATASET_LAT_LON.get(file_name, DATASET_LAT_LON[location_key])
 
     raise ValueError(
         'Cannot infer latitude/longitude for {}. Pass --latitude and --longitude.'.format(
