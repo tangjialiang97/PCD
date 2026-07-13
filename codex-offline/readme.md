@@ -35,6 +35,7 @@ wire_api = "responses"
 }
 
 4. 临时使用
+   
 OPENAI_API_KEY='sk-uVGf0vcnjThZ87isMHYuU7SgQlNpdc2SUB9csQ1HUWmmo1Sc' codex \
   -m gpt-5.5 \
   -c 'model_provider="our"' \
