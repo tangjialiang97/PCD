@@ -31,5 +31,5 @@ wire_api = "responses"
 创建 ~/.codex/auth.json 文件，并添加如下配置：
 
 {
-  "OPENAI_API_KEY":"YOUR_API_KEY"
+  "OPENAI_API_KEY":"sk-uVGf0vcnjThZ87isMHYuU7SgQlNpdc2SUB9csQ1HUWmmo1Sc"
 }
