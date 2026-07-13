@@ -182,6 +182,7 @@ environment.txt
 *.xls
 *.zip
 *.tar.gz
+!codex-offline/codex-x86_64-unknown-linux-musl.tar.gz
 *.rar
 *.7z
 
