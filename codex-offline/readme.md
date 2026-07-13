@@ -33,3 +33,12 @@ wire_api = "responses"
 {
   "OPENAI_API_KEY":"sk-uVGf0vcnjThZ87isMHYuU7SgQlNpdc2SUB9csQ1HUWmmo1Sc"
 }
+
+4. 临时使用
+OPENAI_API_KEY='sk-uVGf0vcnjThZ87isMHYuU7SgQlNpdc2SUB9csQ1HUWmmo1Sc' codex \
+  -m gpt-5.5 \
+  -c 'model_provider="our"' \
+  -c 'model_providers.our.name="test"' \
+  -c 'model_providers.our.base_url="https://ai.xem8k5.top/v1"' \
+  -c 'model_providers.our.env_key="OPENAI_API_KEY"' \
+  -c 'model_providers.our.wire_api="responses"'
