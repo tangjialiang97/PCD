@@ -1,6 +1,6 @@
-# Feasibility by Construction: A Physics-Constrained Decoder for Solar Irradiance Forecasting
+# Physics-Constrained Decoder for Solar Irradiance Forecasting
 
-Official code repository for our NeurIPS 2026 submission on solar irradiance forecasting.
+Official code repository for our ICDE 2027 paper on solar irradiance forecasting.
 
 This repository contains the training, evaluation, data loading, and experiment scripts used in the paper. The code supports standard forecasting backbones and their `SolarPhysics` variants.
 
@@ -19,7 +19,13 @@ This repository contains the training, evaluation, data loading, and experiment 
 ├── scripts/
 │   └── solar/
 │       ├── irr.sh                 # Baseline solar forecasting runs
-│       └── phy.sh                 # Physics-aware solar forecasting runs
+│       ├── phy.sh                 # Physics-aware solar forecasting runs
+│       ├── run_baseline_model.sh  # Shared five-seed baseline runner
+│       ├── timefilter.sh           # TimeFilter runs
+│       ├── itransformer.sh         # iTransformer runs
+│       ├── timesnet.sh              # TimesNet runs
+│       ├── timesfm.sh               # TimesFM runs
+│       └── timemoe.sh               # TimeMoE runs
 ├── checkpoints/                   # Saved model checkpoints
 └── result.txt                     # Appended test metrics
 ```
@@ -44,7 +50,7 @@ data/solar/
 
 ## Additional results
 
-The experimental results for various backbones are shown in experiment_summary.md (only trained with one seed).
+The experimental results for various backbones are shown in experiment_summary.md and are aggregated over five random seeds (2021, 2022, 2023, 2024, and 2025), with mean ± standard deviation reported where applicable.
 
 ## Supported Backbones
 

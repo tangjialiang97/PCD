@@ -72,11 +72,6 @@ def build_hidden_config_hash(parts, prefix='cfg', length=10):
 
 
 if __name__ == '__main__':
-    fix_seed = 2021
-    random.seed(fix_seed)
-    torch.manual_seed(fix_seed)
-    np.random.seed(fix_seed)
-
     parser = argparse.ArgumentParser(description='TimesNet')
 
     # basic config
@@ -205,7 +200,8 @@ if __name__ == '__main__':
 
     # Augmentation
     parser.add_argument('--augmentation_ratio', type=int, default=0, help="How many times to augment")
-    parser.add_argument('--seed', type=int, default=2, help="Randomization seed")
+    parser.add_argument('--seed', type=int, default=2021,
+                        help="Randomization seed; the released scripts use 2021-2025")
     parser.add_argument('--jitter', default=False, action="store_true", help="Jitter preset augmentation")
     parser.add_argument('--scaling', default=False, action="store_true", help="Scaling preset augmentation")
     parser.add_argument('--permutation', default=False, action="store_true",
@@ -321,6 +317,13 @@ if __name__ == '__main__':
     parser.add_argument('--pos', type=int, choices=[0, 1], default=1, help='Positional Embedding. Set pos to 0 or 1')
 
     args = parser.parse_args()
+
+    fix_seed = args.seed
+    random.seed(fix_seed)
+    torch.manual_seed(fix_seed)
+    np.random.seed(fix_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(fix_seed)
     if torch.cuda.is_available() and args.use_gpu:
         args.device = torch.device('cuda:{}'.format(args.gpu))
         print('Using GPU')
@@ -361,6 +364,7 @@ if __name__ == '__main__':
             'dp{}'.format(args.dataset_tag),
             'sl{}'.format(args.seq_len),
             'pl{}'.format(args.pred_len),
+            'seed{}'.format(args.seed),
         ]
         if int(getattr(args, 'label_len', 0)) != 0:
             setting_parts.append('ll{}'.format(args.label_len))

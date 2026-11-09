@@ -317,8 +317,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         f.write(setting + "  \n")
 
      
-        ghi_ymax = ymax[0] if isinstance(ymax, (list, tuple, np.ndarray)) else ymax
-        mae, mse, nrmse, nmae = metric(preds, trues, ghi_ymax)
+        mae, mse, nrmse, nmae = metric(preds, trues, ymax)
         print('mse:{}, mae:{}, nrmse:{}, nmae:{}'.format(mse, mae, nrmse, nmae))
         f.write('mse:{}, mae:{}, nrmse:{}, nmae:{}'.format(mse, mae, nrmse, nmae))
 

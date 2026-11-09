@@ -7,6 +7,7 @@ set -uo pipefail
 debug_mode=False
 gpu_id=0
 log_file="scripts/solar/phy.log"
+seeds=(2021 2022 2023 2024 2025)
 
 # Broad baseline sweep aligned with phy.sh
 models=(
@@ -21,12 +22,13 @@ if [ "$debug_mode" = "True" ]; then
   data_paths=("Congo.csv")
 else
   pred_lens=(24 48 96 192)
-  data_paths=("Congo.csv" "Germany.csv" "NewDelhi.csv" "Folsom_combined.csv")
+  data_paths=("Congo.csv" "Germany.csv" "NewDelhi.csv" "Folsom.csv")
 fi
 
 echo "===== Solar physics runs started: $(date '+%F %T') =====" | tee -a "$log_file"
 failure_count=0
 
+for seed in "${seeds[@]}"; do
 for data_path in "${data_paths[@]}"; do
 for model_name in "${models[@]}"; do
 for pred_len in "${pred_lens[@]}"; do
@@ -40,11 +42,12 @@ for pred_len in "${pred_lens[@]}"; do
     batch_size=512
   fi
 
-  echo "[RUN] model=${model_name} data=${data_path} pred_len=${pred_len} ll=${label_len} bs=${batch_size}" | tee -a "$log_file"
+  echo "[RUN] seed=${seed} model=${model_name} data=${data_path} pred_len=${pred_len} ll=${label_len} bs=${batch_size}" | tee -a "$log_file"
 
   if ! python -u run.py \
     --task_name long_term_forecast \
     --is_training 1 \
+    --seed "$seed" \
     --debug "$debug_mode" \
     --root_path ./data/solar/ \
     --data_path "$data_path" \
@@ -62,6 +65,8 @@ for pred_len in "${pred_lens[@]}"; do
     --enc_in 3 \
     --dec_in 3 \
     --c_out 3 \
+    --is_three \
+    --night_cos_threshold 1e-3 \
     --des 'Exp' \
     --d_model 128 \
     --d_ff 128 \
@@ -71,6 +76,7 @@ for pred_len in "${pred_lens[@]}"; do
     echo "[ERROR] model=${model_name} data=${data_path} pred_len=${pred_len} failed, continue to next run" | tee -a "$log_file"
   fi
 
+done
 done
 done
 done
